@@ -6,8 +6,8 @@ A Bulgarian text-to-speech system built on [OmniVoice](https://github.com/k2-fsa
 **TrainGen** training videos, but usable as a standalone Bulgarian TTS service.
 
 > This is an internal runbook for the cloned OmniVoice repo plus our additions.
-> Upstream OmniVoice docs live in `README.md` / `docs/`; this file documents the
-> **Bulgarian layer** we added and how to operate the whole thing.
+> Upstream OmniVoice docs live in `README.OmniVoice.md` / `docs/`; this file
+> documents the **Bulgarian layer** we added and how to operate the whole thing.
 
 ---
 
