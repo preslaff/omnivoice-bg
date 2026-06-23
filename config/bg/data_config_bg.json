@@ -1,0 +1,8 @@
+{
+    "train": [
+        { "language_id": "bg", "manifest_path": ["data/bg/tokens/train/data.lst"], "repeat": 1 }
+    ],
+    "dev": [
+        { "language_id": "bg", "manifest_path": ["data/bg/tokens/dev/data.lst"], "repeat": 1 }
+    ]
+}
