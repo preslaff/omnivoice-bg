@@ -172,7 +172,7 @@ cd ~/WORK/OmniVoice
 | `config/bg/data_config_bg.json` | Points training at the tokenized WebDataset shards. |
 | `eval_bg_ab.py` | A/B listening harness — synthesizes the same sentences through multiple models with shared reference + optional `--accent`, for by-ear comparison. |
 | `BG_FINETUNE_PLAN.md` | The end-to-end fine-tuning runbook (data → tokenize → train → evaluate → deploy). |
-| `models/omnivoice-bg/` | The deployed fine-tuned model (slimmed checkpoint-2750, ~2.3 GB). *gitignored.* |
+| `models/omnivoice-bg/` | The deployed fine-tuned model (slimmed checkpoint-2750, ~2.3 GB). *gitignored.* Published privately to HF: [`preslaff/omnivoice-bg`](https://huggingface.co/preslaff/omnivoice-bg) (weights + model card + TensorBoard metrics). |
 | `data/bg_lexicon/bg_stress.sqlite` | The stress lexicon (~2M forms, ~380 MB). *gitignored.* |
 | `exp/bg_keep/` | Preserved training checkpoints (250, 1250, 2750). *gitignored.* |
 
