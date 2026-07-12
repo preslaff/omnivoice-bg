@@ -514,6 +514,52 @@ few tokens per variant (`audio_path` at offset `t0`) for the top split words;
 judge whether the aligner's choice matches the narrator. GMM labels are noisy —
 treat as provisional until the TDNN pass (stage 6).
 
+### Full-bg400 alignment run (2026-07-12) — transcript OOV anatomy (paper material)
+
+After the complete ~400 h bg400 ingest (195,701 manifest rows), stages 0–2
+were re-run over the combined audiobook corpus: **203,863 utts (~450 h),
+1,020 pseudo-speakers; dict vocab-limited to 184,345 pronunciations
+(114,840/171,449 transcript types in lexicon; 3.17M out-of-transcript
+pronunciations dropped)**. `tri3b_comb` stays compatible after the lang
+rebuild (identical 34+sil phone set) — alignment proceeds with NO GMM
+retrain (same-narrator data adds nothing a SAT model needs; the one retrain
+that matters is the milestone-A TDNN seed).
+
+**OOV analysis (measure this per corpus — the structure is the finding):**
+56,609 transcript types (33% of types) but only **226,040 / 4,042,683 tokens
+= 5.6%** map to `<unk>`. The token-level rate is what matters (OOV tokens
+just yield no labels; the type inventory of ASR transcripts is junk-heavy).
+The top-15 OOV tokens decompose into exactly two classes:
+
+1. **Proper names of the narrated fiction** (елора, елейн, перин, ранд,
+   седай, дънкан… — a Wheel-of-Time narrator), ~3–4% of tokens.
+   Genuinely out-of-dictionary; unfixable from rechko; harmless as `<unk>`.
+2. **Hyphenated по-/най- comparatives** (по-добре 1,257×, по-малко,
+   по-късно, по-скоро…), 25,753 tokens = 11.4% of OOV = **0.64% of all
+   tokens** (measured). A **lexicon gap, not a
+   tokenizer bug**: `prep_kaldi_data.WORD_RE` keeps hyphenated tokens
+   intact, but the candidates DB has NO hyphenated entries (по-добре → ∅
+   while добре is present). The same words are masked-OOV in the text
+   pipeline too — the Accentor's correct по-висо́ко on the battery is pure
+   character-level generalization, not lexicon supervision.
+
+**Paper points:** (a) label-manufacturing coverage is bounded by LEXICON
+coverage of the transcript register, and the OOV structure is
+register-diagnostic — fiction loses names, parliament will lose different
+mass (verify at milestone A); (b) the comparative class is *recoverable by
+rule* (по-X/най-X → prefix phones + X's candidate pronunciations) but
+encodes a real linguistic decision first: comparatives arguably carry
+DOUBLE stress (по́-добре́), while the whole pipeline assumes one stressed
+vowel per word — the native speaker must fix the convention (prefix `o1`
+vs `o0`, and what the harvested `marked` form should be) before the rule
+is written.
+
+**TODO (milestone A):** add the по-/най- prefix rule to
+`prep_kaldi_data.write_dict` — `kaldi_milestone_a.sh` stage 0 rebuilds the
+dict, so the fix lands there for free, where it matters more (по-добре is
+very frequent in parliamentary speech). Decision for now: align as-is; the
+lost 0.64% are ordinary regular formations, not homograph gold.
+
 ---
 
 ## Stage 5b — Parliament viability pilot (runs on the banked ~100 h NOW)
@@ -770,6 +816,81 @@ crossed at 141 distinct contexts, прави failed at 50 even balanced. Reweigh
 parliament speech), not tuning. Perfective imperatives (купи/скочи) and
 high-count imperfectives (говори) are solved; low-count imperfectives are
 data-bound. See §3 OOD eval for the 0.021% generalization number.
+
+**Fine-tune #5 — the full-400h run (2026-07-12): battery 13→17/25, OOD SER
+0.005% (best ever), and three findings sharpened.** Data: the full-bg400
+harvest (`stress_labels_ab400.jsonl`, 1.22M tokens — supersedes the 63 h
+`stress_labels.jsonl`, do NOT stack both) + parliament round-2 + mined
+contexts + 5:1 chitanka anchor = 1.44M rows (239,788 speech rows / 947,697
+speech-labeled tokens). Pre-flight vetting (36 variants, 164 judgments):
+па́ра/пара́ and са́мо/само́ 100% clean → admitted; every tier-2 exclusion showed
+the 0%-minority signature (може́ 0/5, съ́юз 0/7, всички́ 0/6, вече́/още́/има́ 0%)
+while canonicals vetted ~100% — the strongest F5 evidence table yet; **като
+vetted като́ 10/10, ка́то 0/9** — the harvest majority was RIGHT and the
+Phase-A recollection ("narrator says ка́то") wrong: *vet, don't remember*.
+Training: 10K steps, val SER 0.025% (n=84,425), zero_err 0.000%, SER still
+descending at 10K (~1.8 epochs of the 3× corpus).
+
+Result analysis (each line updates a finding):
+- **прави́ 2/2 — the F4 wall broke between 50 and ~99 contexts:** ~46 vetted
+  speech + ~53 mined ≈ 99 total; говори crossed at 141, прави failed at 50,
+  passes at ~99. The absolute-count threshold is in **[50, 100]**.
+- **ходи́ 2/2 with only 3 speech tokens** — the -и imperative pattern has
+  begun to TRANSFER across verbs once enough classes (говори, прави, купи)
+  are solid: per-class floors drop as the paradigm fills in.
+- **чета INVERTED (F3 confirmed live, predicted by vetting):** че́та tokens
+  vetted 33% (1/2/1) pre-training; after training че́та passes but the
+  previously-solid чета́ verb FAILS, and wild parliament text shows the model
+  wavering (че́та/чета́ in one sentence). Label precision gates minority
+  admission — the vet verdict predicted the inversion before the GPU did.
+  Fix path: per-token vet the ~30 че́та tokens, drop the bad, retrain.
+- **Vetted-clean ≠ flips: пара́ (24 tokens) and само́ (101) did not flip.**
+  пара́ sits AT the ~20 floor, not above it; само́ is drowned 100:1 by са́мо
+  10,759 — at extreme imbalance, ratio still matters even though F4 says
+  count dominates in the 6:1 regime. New passes elsewhere: па́ра (steam),
+  че́та (band), Христо́, Ку́пих aorist.
+- **Production regressions (pin via overrides until next round):**
+  промени́те for проме́ните (native-confirmed) in the TrainGen-register hard
+  words ("Запишете промените") — pinned via `bg_stress_add.py промЕните`
+  (kills the rare промени́те imperative reading; right trade for narration).
+  Also бо́я for боя́ (paint) — but боя is a true homograph (бо́я = the fight,
+  def. of бой), so pinning it is a native call, not automatic.
+- OOD SER 0.005% on 18,565 unambiguous parliament words, function-word
+  zero-error 0.000% — fiction→politics transfer improved 4× alongside the
+  battery gains (no tension between general SER and homograph learning).
+
+**Fine-tune #5b — the vetting veto + boundary oscillation (2026-07-13).**
+Full че́та vetting (30/variant) measured the harvest's че́та tokens at **19%
+precision** (5 ok / 21 bad / 4 unsure) vs чета́ 100% (33/33) — the inversion's
+smoking gun. Fix: `build_accentor_finetune.py --vet-results` (new) — every
+harvest token the native judged bad/unsure is dropped BEFORE tier logic
+(169 tokens removed; keyed on utt+word+marked+t0). The vetting CLI is now
+literally part of the training-data path: humans calibrate, machines scale.
+Retrained 20K steps (~1.8→3.6 epochs): **val SER 0.020% (best fine-tune
+ever), OOD SER 0.005% (step 11K) / 0.000% (step 20K)** — and the wild-text
+чета́ inversion is FIXED at the best.pt checkpoint.
+
+**Boundary-oscillation finding (paper material):** battery classes with
+20–100 training contexts sit on the decision boundary and FLIP between
+adjacent checkpoints of the same run — battery 17 (ft5 @10K) → 15 (ft5b
+@11K) → 16 (ft5b @20K), with пара changing direction twice, вълна swapping
+which 2-of-3 pass, говори́/чета́ landing at 0.49–0.55 confidence. The stable
+core (all 3sg readings, прави́/ходи́/купи́ imperatives, коса́, коли́, за́мък)
+never moves. **Checkpoint selection is blind to this: best.pt selects on
+general val-SER, which does not include homographs.** Checkpoint choice for
+serving must therefore weigh WILD-text homograph reads, not the battery
+alone: step-20K scored +1 battery (пара 2/2, first ever) but regressed wild
+чета́ (че́та в медиите) and wild купи́ ("да си купи́ ваксина" — да-subjunctive
+demands ку́пи); step-11K is wild-perfect. **Serving choice: ft5b best.pt
+(step 11K).** Fix path for the oscillation: (a) add battery+wild pass-rate
+to checkpoint selection; (b) more distinct contexts per boundary class
+(milestone A) — reweighting/threshold tricks do not add signal.
+промените postscript: three checkpoints produced three different markings
+(про́мените / промени́те / про́мените; native truth = проме́ните) — a textbook
+boundary-class signature and the concrete case for the human-overrides veto
+layer in serving (`bg_stress_add.py промЕните` pinned it; mark_tts_txts
+applies overrides too, so the TTS trains on the pinned form).
+
 2. **Imperative text-mining (6e-bis, the real fix)** — see below.
 3. Milestone A: the full 415 h of real audiobooks (narrated *dialogue* = spoken
    imperatives, unlike parliament) + more parliament surface minority tokens
