@@ -336,7 +336,7 @@ Then:
 | Pronunciation improved but voice drifts | expected — fine-tuning ≠ identity | rely on fixed-reference cloning (Phase 7) |
 | `flex_attention` errors on launch | backend unsupported in env | already using `sdpa`; keep it |
 | Garbled/robotic output after training | catastrophic forgetting (LR too high / too many steps) | lower LR, fewer steps, ensure `init_from_checkpoint` set |
-| Wrong stress on specific words | transcript/normalization issue in data | fix those transcripts, re-tokenize, re-train |
+| Wrong stress on specific words | model trained on **unmarked** text but served **marked** text — it never learned `U+0301 → stress` | re-mark training text (`bg_remark_tokens.py`) and re-finetune; **see §11** |
 
 **Golden rules:**
 - Change **one thing at a time** and re-listen.
@@ -355,6 +355,78 @@ Then:
 - [ ] **Phase 5** — training run complete; best checkpoint chosen
 - [ ] **Phase 6** — evaluated (subjective A/B + optional WER)
 - [ ] **Phase 7** — deployed via `serve.py --model`; references regenerated; TrainGen verified
+
+---
+
+## 11. The stress-mark training mismatch (important — read before any re-finetune)
+
+**Symptom.** The fine-tuned model (`checkpoint-2750`, shipped as `models/omnivoice-bg`)
+mis-stresses some words at inference (e.g. *налягането* → wrong syllable) even
+though the stress front-end feeds it the **correct** mark (`наля́гането`).
+
+**Root cause — front-end ↔ model mismatch.** The original BG fine-tune was trained
+on **unmarked** text: `0 of 10,627` transcripts contained the combining acute
+U+0301. But `serve.py` feeds **marked** text at inference. So the model never
+learned `U+0301 → stress the preceding vowel`; it only honored a mark when the base
+OmniVoice prior (weak U+0301 sensitivity from other pretraining languages) happened
+to agree. Where the prior disagreed (*налягането*), the mark was ignored. The
+diacritic *does* reach the model — the Qwen tokenizer emits it as its own token
+(`наля́гане → ['на','ля','́','ган','е']`) — it just had no learned meaning. The model
+and the stress front-end were built independently, so the model was blind to marks.
+
+**Fix attempt 1 — re-mark + continue-finetune (partial).** `bg_remark_tokens.py`
+rewrites the token-shard **text sidecars** through `BgAccenter` (audio tokens
+untouched — no re-tokenization), producing `txts_marked/` + `data_marked.lst`.
+Continue-finetuning from `checkpoint-2750` on marked text
+(`config/bg/train_config_bg_marked.json`, `data_config_bg_marked.json` → `exp/omnivoice_bg_marked`)
+**fixed *налягането*** but **regressed *натиснете*** — a word the prior already got
+right. Best eval loss was the 250-step checkpoint (3.93), but **no single checkpoint
+got both words right.** Two reasons:
+1. **Catastrophic forgetting** — strengthening mark-honoring eroded the prior that nailed *натиснете*.
+2. **Coverage gap** — *натиснете* (and the other TrainGen UI imperatives `изберете`,
+   `въведете`, `отворете`) **never appear in the training audio**; only other `-ете`
+   imperatives do, so the model must *generalize* the mark rule to unseen words.
+
+**Fix attempt 2 — scale + regularize (in progress).** Add a marked **~50 h subset
+of [`beleata74/bulgarian-audiobooks-tts-400h`](https://huggingface.co/datasets/beleata74/bulgarian-audiobooks-tts-400h)**
+(single female narrator, 24 kHz, MIT; `prep_bg400.py` → `data/bg400/`) mixed with
+the existing 15 h, using a **marked-heavy + some-unmarked mix** (anti-forgetting via
+`repeat` weights in `data_config`) and a **lower LR (5e-6)**. This dataset is
+literary prose and **also lacks the UI imperatives** (`натиснете` = 0 clips) — it
+buys broad mark-honoring/generalization, not UI vocabulary. If *натиснете* is still
+wrong after this, the clean fix is **targeted UI-word audio** (record
+`натиснете`/`изберете`/`въведете`… ideally in the deployment voice), which no
+audiobook corpus provides.
+
+**Lesson for any future fine-tune:** train on **marked** text from the start (run
+`bg_remark_tokens.py` before tokenizing, or mark inside `prep_*.py`) so the model
+and the stress front-end stay aligned. Added tooling: `bg_remark_tokens.py`,
+`prep_bg400.py`, `config/bg/*_marked.json`.
+
+### Why this is the paper-sanctioned fix (OmniVoice arch notes)
+
+From the OmniVoice paper (`2604.00688v3.pdf`):
+
+- **Cloning quality is architectural — an in-context acoustic prompt.** OmniVoice
+  splits the acoustic token matrix into `X_prompt` (the reference's full 8-codebook
+  tokens) and `X_target` (masked); the bidirectional Transformer attends over the
+  *whole* reference to fill the target (Fig. 1, §2.1). Rich, lossless conditioning →
+  SOTA speaker similarity (SIM-o 0.729–0.741). By contrast **BgTTS-38M compresses the
+  speaker into a 128-dim MioCodec global embedding** — a lossy bottleneck, which is
+  *why* it clones worse. That gap is by design, not tuning.
+- **OmniVoice already has a phonetic-override mechanism (§2.3.3).** During training it
+  *"stochastically replaces characters or words with their phonetic transcriptions"*
+  (Pinyin for Chinese, CMU phonemes for English) for deterministic pronunciation
+  control at inference. **Bulgarian stress just wasn't in that training.** Our
+  marked-heavy/unmarked mixed finetune is literally reproducing this recipe, extended
+  to the U+0301 stress mark — so it's the method the architecture was designed for.
+
+**Implication:** the "best of both worlds" (OmniVoice cloning + correct stress) is
+reachable *inside* OmniVoice — no architecture change or reproduction needed. BgTTS's
+role is at most a **stress oracle/teacher** (see the BgTTS section in OMNIVOICE_BG.md):
+generate correct-stress clips of words we lack (distillation), not a model to clone.
+A from-scratch reproduction of the paper would only matter for training a new base
+model, not for this stress fix.
 
 ---
 

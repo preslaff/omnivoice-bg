@@ -50,6 +50,14 @@ OmniVoice-BG fixes all three.
 
 These are **orthogonal** — each fixes a different failure, all three are needed.
 
+> ⚠️ **Known issue (stress front-end ↔ model alignment).** The shipped model
+> (`checkpoint-2750`) was fine-tuned on **unmarked** text, but the server feeds it
+> **stress-marked** text — so it never learned `U+0301 → stress` and mis-stresses
+> some words (e.g. *налягането*) despite a correct mark. The fix is to re-mark the
+> training text (`bg_remark_tokens.py`) and re-finetune with marked data (+ a 50 h
+> slice of `beleata74/bulgarian-audiobooks-tts-400h` for coverage). Full write-up:
+> **[BG_FINETUNE_PLAN.md §11](BG_FINETUNE_PLAN.md)**.
+
 ## System architecture
 
 ```
@@ -175,6 +183,8 @@ cd ~/WORK/OmniVoice
 | `models/omnivoice-bg/` | The deployed fine-tuned model (slimmed checkpoint-2750, ~2.3 GB). *gitignored.* Published privately to HF: [`preslaff/omnivoice-bg`](https://huggingface.co/preslaff/omnivoice-bg) (weights + model card + TensorBoard metrics). |
 | `data/bg_lexicon/bg_stress.sqlite` | The stress lexicon (~2M forms, ~380 MB). *gitignored.* |
 | `exp/bg_keep/` | Preserved training checkpoints (250, 1250, 2750). *gitignored.* |
+| `omnivoice/cli/bgtts_engine.py` | `BgTTSEngine` — wrapper for the optional **BgTTS-38M-V2** alternative engine (see [Alternative engine](#alternative-engine-bgtts-38m-v2)). |
+| `models/bgtts-38m/` | Vendored BgTTS-38M-V2 code + `checkpoint_inference.pt`. *gitignored* (downloaded artifact). |
 
 ### TrainGen repo (`~/WORK/TrainGen`)
 
@@ -232,6 +242,60 @@ PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True ./venv/bin/accelerate launch \
 marking for one request).
 
 **TrainGen env**: `TRAINGEN_TTS`, `TRAINGEN_OMNIVOICE_URL`, `TRAINGEN_VOICE_DIR`.
+
+---
+
+## Alternative engine: BgTTS-38M-V2
+
+The server can host a **second TTS engine** alongside OmniVoice-BG and pick between
+them per request. The alternative is
+[**BgTTS-38M-V2**](https://huggingface.co/beleata74/BgTTS-38M-V2) (Apache-2.0) — a
+38M-param encoder-decoder TTS that takes **plain** Bulgarian text and clones a
+voice from a [MioCodec](https://huggingface.co/Aratako/MioCodec-25Hz-24kHz) speaker
+embedding. Notably it gets Bulgarian lexical stress right **from plain text, with
+no stress front-end** (it handled both *налягането* and *натиснете* correctly in
+A/B tests where OmniVoice-BG needed the lexicon and still couldn't get both).
+
+**Why it's wired in as an option, not a replacement:** it's ~16× smaller and a
+different voice/model; we keep OmniVoice-BG (with the stress front-end + fixed
+cloning) as the default and expose BgTTS as a fallback/comparison engine.
+
+### How it's integrated
+- **`omnivoice/cli/bgtts_engine.py`** — `BgTTSEngine` loads the vendored BgTTS code
+  + checkpoint from a directory, pre-encodes the server's `--ref-audio` into a
+  MioCodec speaker embedding, and exposes `synth(text) -> wav`.
+- **`serve.py`** — `--bgtts-dir` loads the engine; `--default-engine` picks the
+  default; the `/synth` body accepts `"engine": "omnivoice" | "bgtts"`. Both engines
+  share the GPU lock. **BgTTS always gets plain text** — the BG accenter is skipped
+  for it (its 146-char tokenizer has no U+0301). `/health` lists available `engines`.
+
+### Setup (one-time)
+```bash
+# 1. MioCodec codec (not on PyPI — installs from GitHub; pulls MioCodec+WavLM on first load)
+./venv/bin/pip install "git+https://github.com/Aratako/MioCodec"
+# 2. Fetch the BgTTS model code + checkpoint into a gitignored dir
+./venv/bin/hf download beleata74/BgTTS-38M-V2 --local-dir models/bgtts-38m
+```
+
+### Run + use
+```bash
+# add --bgtts-dir to the normal launch (OmniVoice stays the default engine)
+bash serve_bg.sh            # after adding OMNIVOICE_BG_BGTTS_DIR support, or run serve.py directly:
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True ./venv/bin/python -m omnivoice.cli.serve \
+    --model models/omnivoice-bg \
+    --ref-audio data/bg_ref/narrator.wav --ref-text "<transcript>" \
+    --lexicon data/bg_lexicon/bg_stress.sqlite --overrides config/bg/bg_stress_overrides.json \
+    --bgtts-dir models/bgtts-38m --host 0.0.0.0 --port 8002 --seed 42
+
+# request the alternative engine per call:
+curl -s localhost:8002/synth -H 'Content-Type: application/json' \
+    -d '{"text":"Натиснете бутона.", "engine":"bgtts"}' --output bgtts.wav
+```
+
+> **Status:** the engine wrapper is verified standalone (synthesizes correctly via
+> `models/bgtts-38m`), and the `serve.py` wiring is implemented but **not yet
+> smoke-tested through the running server** (deferred to finish the fine-tune
+> first). The same fixed `--ref-audio` is cloned for both engines.
 
 ---
 

@@ -1052,6 +1052,42 @@ finetune) — polishing a base that is about to be replaced wastes the
 GPU-weeks that candidate generation costs. Rung 0 is the exception: it is
 base-independent and can ship anytime.
 
+### Stage 8 validated — best-of-8 oracle experiment (2026-07-13)
+
+The `bon_generate.py` → `bon_judge.sh` → `bon_score.py` harness ran the
+oracle test on the 28 border sentences with `omnivoice_bg_full/6500`
+(413 h + ft5b marks; serve-time decoding, seed the only knob —
+`position_temperature=5.0` randomizes unmasking order):
+
+- **single-sample 12/27 → judge-picked 19/27 = oracle 19/27** (sentences
+  with all judgeable targets correct). The Kaldi stress-aligner judge
+  captured **100 % of the selection headroom** — Rung 0/1 are validated.
+- Target level: 73/82 targets correct in ≥1 of 8 candidates.
+- The 8 unrecoverable sentences decompose into distinct failure classes.
+  True prior dominance (mark right, TTS refuses all 8): прави́ & ходи́
+  (final-stress imperatives), сгреши́, пеша́, въ́лна. But the full table
+  also exposed **Accentor errors the TTS unanimously corrected**: пара́
+  marked for *steam*, чета́ for the *noun*, у́чи for the *imperative*,
+  Си́нът for синъ́т, plus tier-2 weak words (още́, ако́, между́) marked at
+  inference — i.e. *unanimous disobedience audits the front-end*, and the
+  judge's 19/27 is an obedience score, not a correctness score. By-ear
+  review additionally found stress errors on single-variant words the
+  judge cannot see. Full decomposition, fixes, and the milestone-A
+  execution plan: **`BG_FINAL_EFFORT_PLAN.md`**; distilled lessons:
+  **`BG_LESSONS.md`**; artifact map: **`BG_ARTIFACTS_INDEX.md`**.
+
+Context that triggered this: the 63 h → 413 h acoustic scale-up
+(`omnivoice_bg_full`, eval loss 3.88 → 3.43) barely moved mark obedience —
+acoustic volume saturated (F12), pointing the residual at sampling/prior
+rather than data.
+
+Judge design update (2026-07-14): the reward table above is now a
+two-stage **composite judge** — Whisper round-trip CER as a GATE
+(intelligibility; forced alignment force-fits wrong-word audio), Kaldi
+stress score as the RANKER (stress; ASR is blind to it — BG orthography
+doesn't write stress). Full design + the ASR-circularity trap:
+`BG_FINAL_EFFORT_PLAN.md` §P4.
+
 ---
 
 ## Pitfalls & lessons (hard-won — read before running anything heavy)
@@ -1135,4 +1171,7 @@ base-independent and can ship anytime.
 | `kaldi_milestone_a.sh` | Stage 6a–6c milestone-A scale-up: combined GMM retrain + annotation TDNN + F5 acceptance + harvest |
 | `synth_chitanka_bgtts.py` | parked (TTS-distillation only; not for labels) |
 | `omnivoice/cli/serve.py`, `serve_bg.sh`, `bg_accent.py` | Stage 7 serving |
+| `bon_generate.py`, `bon_judge.sh`, `bon_score.py` | Stage 8 best-of-N oracle harness (generate → align-judge → score) |
+| `eval_bg_ab.py` (`--accentor`), `eval_ab_border.txt` | boundary-homograph A/B eval with contextual marks |
+| `tokenize_bg400_full.sh`, `train_tts_full.sh` | 413 h TTS scale-up (tokens + launcher) |
 | `config/bg/*.json` | curated battery / function words / supplement / train configs |
