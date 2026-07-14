@@ -66,6 +66,12 @@ def main():
     ap.add_argument("--num-step", type=int, default=32)
     ap.add_argument("--accent", action="store_true",
                     help="apply Bulgarian stress marking (matches the production server)")
+    ap.add_argument("--accentor", default=None,
+                    help="Accentor checkpoint (e.g. exp/accentor_ft5b/best.pt): mark "
+                         "with the CONTEXTUAL front-end — the same marks serve.py "
+                         "--accentor produces. Supersedes --accent (rechko lookup), "
+                         "which cannot resolve homographs, so an ft4-vs-ft5b A/B "
+                         "under --accent never exercises the boundary words.")
     ap.add_argument("--lexicon", default="data/bg_lexicon/bg_stress.sqlite")
     ap.add_argument("--overrides", default="config/bg/bg_stress_overrides.json")
     args = ap.parse_args()
@@ -81,7 +87,15 @@ def main():
         sentences = DEFAULT_SENTENCES
 
     # Optional stress marking, so the A/B reflects the deployed pipeline
-    if args.accent:
+    if args.accentor:
+        from accentor_model import AccentorAccenter
+        acc = AccentorAccenter(args.accentor, args.overrides)
+        marked = [acc.accent_text(s) for s in sentences]
+        for s, m in zip(sentences, marked):
+            if m != s:
+                print(f"  [accentor] {m}")
+        sentences = marked
+    elif args.accent:
         from bg_accent import BgAccenter
         acc = BgAccenter(args.lexicon, args.overrides)
         sentences = [acc.accent_text(s) for s in sentences]

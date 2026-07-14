@@ -1,0 +1,68 @@
+{
+  "_comment": "Context sentences for the homograph battery — the BgTTS stress-oracle validation (synth_chitanka_bgtts.py --battery). Each entry: an UNMARKED sentence whose context forces one reading, plus the expected stress mark. VETTED 2026-07-04 (native listening pass on BgTTS clips): вълна/пара/говори confirmed as true homographs AND BgTTS realizes the stress contextually -> oracle gate PASSED. замък and тела removed — not true homographs (see homograph_battery.json _vetting).",
+  "_format": "list of {surface, expected, gloss, sentence}",
+  "sentences": [
+    { "surface": "вълна", "expected": "въ́лна", "gloss": "wool",
+      "sentence": "Пуловерът е изплетен от мека овча вълна." },
+    { "surface": "вълна", "expected": "вълна́", "gloss": "wave",
+      "sentence": "Огромна вълна заля скалите на брега." },
+    { "surface": "вълна", "expected": "вълна́", "gloss": "wave (radio)",
+      "sentence": "Радиостанцията излъчва на къса вълна." },
+
+    { "surface": "пара", "expected": "па́ра", "gloss": "steam",
+      "sentence": "От тенджерата се вдигаше гъста пара." },
+    { "surface": "пара", "expected": "пара́", "gloss": "coin/cent",
+      "sentence": "Той нямаше пукната пара в джоба си." },
+
+    { "surface": "говори", "expected": "гово́ри", "gloss": "(he/she) speaks, 3sg",
+      "sentence": "Тя говори тихо по телефона всяка вечер." },
+    { "surface": "говори", "expected": "говори́", "gloss": "speak!, imperative",
+      "sentence": "Говори по-високо, защото не те чувам!" },
+
+    { "surface": "чета", "expected": "че́та", "gloss": "band/detachment (noun; the paper's own example)", "draft": true,
+      "sentence": "Хайдушката чета премина тайно през планината." },
+    { "surface": "чета", "expected": "чета́", "gloss": "I read (verb, 1sg)", "draft": true,
+      "sentence": "Всяка вечер чета по една глава от книгата." },
+
+    { "surface": "коса", "expected": "коса́", "gloss": "hair", "draft": true,
+      "sentence": "Тя реши дългата си коса пред огледалото." },
+    { "surface": "коса", "expected": "ко́са", "gloss": "slanted (adj. fem.: коса черта)", "draft": true,
+      "sentence": "Напиши адреса с коса черта между двете имена." },
+
+    { "surface": "само", "expected": "са́мо", "gloss": "only (particle)", "draft": true,
+      "sentence": "Искам само една минута от времето ти." },
+    { "surface": "само", "expected": "само́", "gloss": "alone (neuter of сам)", "draft": true,
+      "sentence": "Детето остана само вкъщи цяла вечер." },
+
+    { "surface": "моли", "expected": "мо́ли", "gloss": "begs (present 3sg)", "draft": true,
+      "sentence": "Той моли за прошка всеки път, когато сгреши." },
+    { "surface": "моли", "expected": "моли́", "gloss": "beg!, imperative", "draft": true,
+      "sentence": "Моли се времето да се задържи хубаво." },
+
+    { "surface": "носи", "expected": "но́си", "gloss": "carries (present 3sg)", "draft": true,
+      "sentence": "Тя носи тежка чанта всеки ден." },
+    { "surface": "носи", "expected": "носи́", "gloss": "carry!, imperative", "draft": true,
+      "sentence": "Носи багажа до колата, моля те." },
+
+    { "surface": "прави", "expected": "пра́ви", "gloss": "does (present 3sg)", "draft": true,
+      "sentence": "Той прави всичко възможно, за да помогне." },
+    { "surface": "прави", "expected": "прави́", "gloss": "do!, imperative", "draft": true,
+      "sentence": "Прави каквото ти казвам и няма да съжаляваш." },
+
+    { "surface": "купи", "expected": "ку́пи", "gloss": "bought (aorist 3sg)", "draft": true,
+      "sentence": "Вчера тя купи хляб и мляко от магазина." },
+    { "surface": "купи", "expected": "купи́", "gloss": "buy!, imperative", "draft": true,
+      "sentence": "Купи билети за концерта още днес." },
+
+    { "surface": "учи", "expected": "у́чи", "gloss": "studies (present 3sg)", "draft": true,
+      "sentence": "Синът им учи медицина в София." },
+    { "surface": "учи", "expected": "учи́", "gloss": "study!, imperative", "draft": true,
+      "sentence": "Учи всеки ден, ако искаш да изкараш изпита." },
+
+    { "surface": "ходи", "expected": "хо́ди", "gloss": "walks/goes (present 3sg)", "draft": true,
+      "sentence": "Тя ходи на работа пеша всяка сутрин." },
+    { "surface": "ходи", "expected": "ходи́", "gloss": "walk!, imperative", "draft": true,
+      "sentence": "Ходи по-бързо, че ще закъснеем!" }
+  ],
+  "_draft_note": "Entries with draft:true were DRAFTED BY CLAUDE (2026-07-04), NOT yet vetted. Vetting workflow: (1) native check — real stress homograph? natural sentences? (2) synthesize with synth_chitanka_bgtts.py --battery ... --out data/chitanka_audio_battery2, (3) listen: does BgTTS realize the expected stress per context? (4) promote confirmed pairs into homograph_battery.json (seeds L1) and drop the draft flag; move rejects to its rejected section. Classes: paper's чета; adj-vs-noun (коса); particle-vs-adjective (само); stem-stressed и-verb 3sg-vs-imperative (моли/носи/прави/учи/ходи — same class as the confirmed говори); aorist-vs-imperative (купи). REJECTED by native vetting 2026-07-04: а-verb present-vs-aorist (гледа/вика/пита — NO stress shift in the aorist; false generalization), and with it the пи́та noun contrast (noun and verb are both пи́та). плати dropped: платя́ is end-stressed, aorist and imperative are both плати́ — no contrast."
+}

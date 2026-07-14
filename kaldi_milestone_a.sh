@@ -161,9 +161,12 @@ fi
 
 if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
   echo "=== stage 6: annotation TDNN (nnet3 CE, hires MFCC, GPU) ==="
-  cuda-compiled || {
+  # cuda-compiled lives in nnet3bin, which the workspace path.sh omits.
+  "$KALDI_ROOT/src/nnet3bin/cuda-compiled" || {
     echo "ERROR: this Kaldi build has no CUDA — rebuild with --use-cuda=yes"
-    echo "       (CUDA 12.x toolkit; see the header of this script)"; exit 1; }
+    echo "       (CUDA 13.1 works: local configure patch adds the 13_* case;"
+    echo "        use --cuda-arch=\"-gencode arch=compute_120,code=sm_120\")"; exit 1; }
+  export PATH=$KALDI_ROOT/src/nnet3bin:$PATH
   cat > conf/mfcc_hires.conf <<'EOF'
 --use-energy=false
 --sample-frequency=16000

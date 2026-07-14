@@ -1,0 +1,18 @@
+{
+  "_comment": "Bulgarian stress-homograph validation battery + curated seed for lexicon L1b. Each surface form maps to ALL correct stress-marked readings (U+0301 after the stressed vowel) with a gloss. Used to (1) validate lexicon RECALL — the true stress must appear among generated candidates — and (2) seed lexically-distinct homographs that rechko lacks entirely. VETTED pairs only; expand from Bulgarian Wiktionary / a native reviewer before relying on coverage. rechko currently supplies only ONE of each pair (see BG_PARLIAMENT_INGESTION.md).",
+  "_format": "surface (unmarked, lowercase) -> [ {mark, gloss, pos} ]",
+  "_vetting": "2026-07-04 native-speaker listening pass on BgTTS battery clips: замък and тела REJECTED as homographs (замъ́к 'lock' is Russian, not standard BG — the Accentor paper itself attributes зàмок/замòк to Russian; тела has only the reading тела́, pl. of тяло — rechko's canonical те́ла is a wrong mobile-stress projection, kept in the candidates DB only for recall). вълна/пара/говори CONFIRMED: two meanings, two stresses, and BgTTS realizes them contextually.",
+  "homographs": {
+    "вълна":  [ {"mark": "въ́лна",  "gloss": "wool",          "pos": "noun"},
+               {"mark": "вълна́",  "gloss": "wave",          "pos": "noun"} ],
+    "пара":   [ {"mark": "па́ра",   "gloss": "steam",         "pos": "noun"},
+               {"mark": "пара́",   "gloss": "coin/cent",     "pos": "noun"} ],
+    "говори": [ {"mark": "гово́ри", "gloss": "(he) speaks (3sg)",      "pos": "verb"},
+               {"mark": "говори́", "gloss": "speak! (imperative)",     "pos": "verb"} ]
+  },
+  "rejected": {
+    "замък":  [ {"mark": "замъ́к",  "gloss": "lock/clasp — Russian, not BG; do not seed", "pos": "noun"} ],
+    "тела":   [ {"mark": "те́ла",   "gloss": "wires — rejected; тела is unambiguous тела́ (pl. of тяло)", "pos": "noun"} ]
+  },
+  "_todo": "Expand: noun/verb stress pairs, sg/pl mobile-stress, functional-word stress, imperative -ете/-йте vs 3sg (the говори class is productive — every -и verb has this pair). Source: bg.wiktionary inflection tables (stress-marked). Keep only VERIFIED readings — a wrong entry poisons both the validation metric and the decoding graph."
+}

@@ -1,0 +1,20 @@
+{
+  "_note": "Verbs whose relevant surface is ALWAYS final-stressed — no root-stressed form shares the spelling (native-verified 2026-07-06). These are NOT homographs. build_stress_candidates.py forces each to a SINGLE final-stress candidate: it (a) overrides rechko, which mis-marks 7 as root (ка́жи/взе́ми/се́дни/въ́рни/пу́сни/хва́ни/ре́ши), and (b) suppresses the 2-vowel over-generation policy that invents a spurious root reading. Effect: the text pretrain marks them correctly everywhere, with NO mining and zero false-positive risk. Contrast the TRUE homographs that DO need context (root-stressed base — купи ку́пи / скочи ско́чи, and the imperfectives носи но́си / ходи хо́ди / говори гово́ри / прави пра́ви / учи у́чи / моли мо́ли) plus the SEMANTIC homographs чета (noun че́та) and прости (adjective про́сти 'stupid/simple, pl.' vs verb прости́ 'forgive!'). Criterion: root-stressed base -> homograph; end-stressed base or imperative-only surface -> always final.",
+  "verbs": {
+    "донеси": "донеси́",
+    "кажи": "кажи́",
+    "вземи": "вземи́",
+    "седни": "седни́",
+    "върни": "върни́",
+    "пусни": "пусни́",
+    "хвани": "хвани́",
+    "плати": "плати́",
+    "реши": "реши́",
+    "качи": "качи́",
+    "върви": "върви́",
+    "спести": "спести́",
+    "държи": "държи́",
+    "мълчи": "мълчи́",
+    "лежи": "лежи́"
+  }
+}

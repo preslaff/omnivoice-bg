@@ -1,0 +1,21 @@
+{
+  "_comment": "Curated high-frequency forms ABSENT from rechko (irregular paradigms it lacks). Surface -> [stress-marked readings] (U+0301; bare = unstressed clitic). Dominated by the съм 'to be' paradigm, which is irregular and missing from rechko yet extremely frequent (беше/са/бяха… ≈1.6% of corpus tokens). Phonetized by build_lexicon_phones.g2p like any other entry. Keep VERIFIED only.",
+  "forms": {
+    "съм":   ["съм"],
+    "си":    ["си"],
+    "е":     ["е"],
+    "сме":   ["сме"],
+    "сте":   ["сте"],
+    "са":    ["са"],
+    "бях":   ["бя́х"],
+    "бе":    ["бе́"],
+    "беше":  ["бе́ше"],
+    "бяхме": ["бя́хме"],
+    "бяхте": ["бя́хте"],
+    "бяха":  ["бя́ха"],
+    "й":     ["й"],
+    "ѝ":     ["ѝ"],
+    "в":     ["в"],
+    "с":     ["с"]
+  }
+}

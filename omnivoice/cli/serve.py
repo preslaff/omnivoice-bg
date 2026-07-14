@@ -99,6 +99,7 @@ class SynthRequest(BaseModel):
     class_temperature: Optional[float] = None
     seed: Optional[int] = None
     accent: Optional[bool] = None  # Bulgarian stress marking; None = use server default
+    engine: Optional[str] = None  # "omnivoice" | "bgtts"; None = server default
 
 
 def _set_seed(seed: Optional[int]) -> None:
@@ -109,11 +110,19 @@ def _set_seed(seed: Optional[int]) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def build_app(model: OmniVoice, defaults: dict, default_prompt=None, accenter=None) -> FastAPI:
+def build_app(
+    model: OmniVoice,
+    defaults: dict,
+    default_prompt=None,
+    accenter=None,
+    bgtts_engine=None,
+    default_engine: str = "omnivoice",
+) -> FastAPI:
     app = FastAPI(title="OmniVoice TTS")
     # Serialize generation: one model on one GPU; concurrent calls would race
     # and can OOM. Requests queue and run one at a time. Serialization also keeps
     # seeding deterministic (no interleaved RNG consumption between requests).
+    # The lock is shared across engines — both share the single GPU.
     lock = threading.Lock()
     # Cache encoded voice prompts so a repeated reference (same client voice) is
     # not re-encoded on the GPU every call. Keyed by hash(raw audio + transcript).
@@ -121,17 +130,45 @@ def build_app(model: OmniVoice, defaults: dict, default_prompt=None, accenter=No
 
     @app.get("/health")
     def health():
+        engines = ["omnivoice"] + (["bgtts"] if bgtts_engine is not None else [])
         return {
             "status": "ok",
             "sampling_rate": SAMPLING_RATE,
             "fixed_voice": default_prompt is not None,
             "bg_accent": accenter is not None,
+            "accent_frontend": type(accenter).__name__ if accenter else None,
+            "engines": engines,
+            "default_engine": default_engine,
         }
 
     @app.post("/synth")
     def synth(req: SynthRequest):
         if not req.text or not req.text.strip():
             raise HTTPException(status_code=400, detail="`text` is empty")
+
+        engine = (req.engine or default_engine).lower()
+        if engine not in ("omnivoice", "bgtts"):
+            raise HTTPException(status_code=400, detail=f"unknown engine: {engine!r}")
+
+        # --- BgTTS-38M engine: plain text (no accenting), fixed cloned voice. ---
+        if engine == "bgtts":
+            if bgtts_engine is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="bgtts engine not loaded (start server with --bgtts-dir)",
+                )
+            try:
+                with lock:
+                    audio = bgtts_engine.synth(req.text)
+            except torch.OutOfMemoryError as exc:
+                torch.cuda.empty_cache()
+                raise HTTPException(status_code=503, detail=f"GPU OOM: {exc}") from exc
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("bgtts generation failed")
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
+            buf = io.BytesIO()
+            sf.write(buf, audio, SAMPLING_RATE, format="WAV")
+            return Response(content=buf.getvalue(), media_type="audio/wav")
 
         # Bulgarian stress marking (server-side). Only touches Cyrillic words.
         text = req.text
@@ -230,7 +267,24 @@ def main():
 
     # Bulgarian stress marking (server-side). Marks Cyrillic words before TTS.
     parser.add_argument("--lexicon", default=None, help="rechko stress sqlite (enables BG accenting)")
+    parser.add_argument(
+        "--accentor", default=None,
+        help="Accentor checkpoint (.pt) for CONTEXTUAL stress marking — "
+             "resolves homographs by sentence context; supersedes --lexicon",
+    )
+    parser.add_argument("--accent-threshold", type=float, default=0.5,
+                        help="Accentor: min prob to place a stress mark")
     parser.add_argument("--overrides", default=None, help="JSON of word->stressed overrides")
+
+    # Optional alternative engine: BgTTS-38M-V2 (plain text, MioCodec cloning).
+    parser.add_argument(
+        "--bgtts-dir", default=None,
+        help="dir with BgTTS-38M-V2 code + checkpoint_inference.pt (enables the 'bgtts' engine)",
+    )
+    parser.add_argument(
+        "--default-engine", default="omnivoice", choices=["omnivoice", "bgtts"],
+        help="engine used when a request omits 'engine'",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -266,20 +320,44 @@ def main():
     }
 
     accenter = None
-    if args.lexicon:
+    if args.accentor:
+        from accentor_model import AccentorAccenter  # repo-root; run from root
+
+        accenter = AccentorAccenter(args.accentor, args.overrides,
+                                    device="cpu",
+                                    threshold=args.accent_threshold)
+        logger.info("BG stress accenting ON — CONTEXTUAL Accentor "
+                    "(ckpt=%s step=%s, overrides=%s)",
+                    args.accentor, accenter.step, args.overrides)
+    elif args.lexicon:
         from bg_accent import BgAccenter  # repo-root module; run from repo root
 
         accenter = BgAccenter(args.lexicon, args.overrides)
-        logger.info("BG stress accenting ON (lexicon=%s, overrides=%s)",
-                    args.lexicon, args.overrides)
+        logger.info("BG stress accenting ON — rechko lexicon "
+                    "(lexicon=%s, overrides=%s)", args.lexicon, args.overrides)
+
+    bgtts_engine = None
+    if args.bgtts_dir:
+        from omnivoice.cli.bgtts_engine import BgTTSEngine
+
+        logger.info("Loading BgTTS-38M engine from %s ...", args.bgtts_dir)
+        bgtts_engine = BgTTSEngine(args.bgtts_dir, ref_audio=args.ref_audio, device=str(device))
+        if bgtts_engine.speaker_emb is None:
+            logger.warning("BgTTS loaded WITHOUT a fixed voice — pass --ref-audio to enable it.")
+        else:
+            logger.info("BgTTS engine ready (fixed voice cloned from %s).", args.ref_audio)
+
+    if args.default_engine == "bgtts" and bgtts_engine is None:
+        parser.error("--default-engine bgtts requires --bgtts-dir")
 
     logger.info(
-        "Decoding defaults: %s | fixed_voice=%s | bg_accent=%s",
-        defaults, default_prompt is not None, accenter is not None
+        "Decoding defaults: %s | fixed_voice=%s | bg_accent=%s | engines=%s | default=%s",
+        defaults, default_prompt is not None, accenter is not None,
+        ["omnivoice"] + (["bgtts"] if bgtts_engine else []), args.default_engine,
     )
     logger.info("Serving on http://%s:%d", args.host, args.port)
 
-    app = build_app(model, defaults, default_prompt, accenter)
+    app = build_app(model, defaults, default_prompt, accenter, bgtts_engine, args.default_engine)
     uvicorn.run(app, host=args.host, port=args.port, workers=1)
 
 

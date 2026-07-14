@@ -1,0 +1,14 @@
+{
+  "_note": "Verb-imperative homographs with BOTH readings, for mine_homographs.py. Each verb's imperative (final stress) collides with a root-stressed non-imperative form of the same verb; a context-aware model learns the boundary only from CORRECT labels of BOTH readings. 'imp' = imperative (final), 'sg3' = 3sg present (imperfectives) or aorist 3sg (perfectives) — both root-stressed. Marks are DB-verified. 'perfective' lists verbs whose imperative is a clean immediate command (so a clause-initial '!' in short dialogue is reliably imperative); imperfective imperatives are durative and surface-identical to the indignant/habitual 3sg exclamation, so they are mined ONLY via the particle cue. Native-verified 2026-07-07. Excludes the 15 always-final verbs (not homographs) and semantic homographs чета/прости.",
+  "homographs": {
+    "носи":   {"imp": "носи́",   "sg3": "но́си"},
+    "ходи":   {"imp": "ходи́",   "sg3": "хо́ди"},
+    "говори": {"imp": "говори́", "sg3": "гово́ри"},
+    "прави":  {"imp": "прави́",  "sg3": "пра́ви"},
+    "учи":    {"imp": "учи́",    "sg3": "у́чи"},
+    "моли":   {"imp": "моли́",   "sg3": "мо́ли"},
+    "купи":   {"imp": "купи́",   "sg3": "ку́пи"},
+    "скочи":  {"imp": "скочи́",  "sg3": "ско́чи"}
+  },
+  "perfective": ["купи", "скочи"]
+}

@@ -1,0 +1,10 @@
+{
+  "_comment": "Closed class of Bulgarian function words that are USUALLY UNSTRESSED (proclitics/enclitics). mark_chitanka_text.py gives these an explicit all-unstressed label (zeros in the Accentor's per-vowel BCE) instead of masking them as OOV. DRAFTED BY CLAUDE 2026-07-04 — needs native vetting. Deliberately EXCLUDED because the same surface has a stressed reading: ти/те/то (subject pronoun vs clitic), край (preposition vs noun кра́й), ако/дали/нито/срещу/против (carry their own stress), аз/той/тя (stressed pronouns). CAUTION: не can take emphatic stress in speech; kept here because in written prose the unstressed proclitic reading dominates — revisit if the human-speech branches show it matters.",
+  "words": [
+    "а", "без", "би", "в", "ви", "във", "ги", "го", "да", "до",
+    "за", "зад", "и", "из", "им", "към", "ли", "ме", "ми", "му",
+    "на", "над", "не", "ни", "но", "от", "по", "под", "пред", "през",
+    "при", "пък", "с", "се", "си", "след", "със", "та", "у", "че",
+    "чрез", "ще", "я"
+  ]
+}
