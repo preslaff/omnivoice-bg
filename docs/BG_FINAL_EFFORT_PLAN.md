@@ -61,6 +61,25 @@ combined GMM retrain → tri4b, cleanup); stages 6–8 after the CUDA rebuild
 (CE non-chain TDNN — 10 ms frames preserved for harvest timestamps —
 align + F5 acceptance: може/всички/съюз counts must flip canonical).
 
+**Recognized byproduct — a full Bulgarian ASR (off the critical path,
+recorded 2026-07-15):** P1 produces two of the three components of a
+complete ASR system: the TDNN acoustic model (trained on ~860 h of
+transcribed BG: audiobooks + parliament) and the 115 K-word pronunciation
+lexicon. The only missing piece is an n-gram language model — buildable
+from chitanka text — after which LM + lexicon + TDNN compile into an HCLG
+decoding graph = a working Bulgarian recognizer. Days of work on top of
+milestone-A, not months. Uses, in priority order:
+1. **Standalone release/paper**: ~860 h of aligned, cleaned BG speech is
+   likely the largest such corpus assembled; "BG parliament ASR + corpus
+   recipe" mirrors the Finnish-parliament reference paper (2203.14876)
+   and is publishable alongside the Accentor work.
+2. **Data flywheel**: transcribe UNLABELED Bulgarian audio to grow the
+   corpus — with ASR transcripts quarantined from stress-label harvesting
+   (same circularity discipline as synthetic audio).
+3. In-pipeline value is modest (Whisper already covers the CER gate); a
+   domain-tuned ASR only wins on new unlabeled in-domain audio.
+Nothing in P1–P6 depends on this — build it only after the cycle lands.
+
 **Feature upgrade decision (do at P1, free while retraining anyway):**
 add Kaldi pitch features (`steps/make_mfcc_pitch.sh`, +3 dims: F0/voicing/
 ΔF0) — Bulgarian stress is realized via pitch movement that plain MFCC
