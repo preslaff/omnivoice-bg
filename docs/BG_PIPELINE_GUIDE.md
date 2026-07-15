@@ -481,6 +481,47 @@ train the annotation TDNN (415 h of real audiobooks count toward the paper's
 
 ---
 
+### Background: the two acoustic models (GMM → TDNN), in plain words
+
+Kaldi's alignment uses two kinds of acoustic model, one after the other. Both
+answer the same question — *"how likely is this 10 ms slice of audio to be
+phone X (e.g. the stressed vowel a1)?"* — but with different machinery, and
+we use them in sequence for a reason.
+
+**GMM = Gaussian Mixture Model** (the name is the math; the idea is simple).
+Each 10 ms slice becomes ~13 numbers (MFCCs, see the feature section). Plot
+them and every instance of a phone lands in a *cloud* of points — not one
+exact spot, because every "a" differs by speaker, pitch, mood. A **Gaussian**
+is a bell-curve blob saying "sounds like this cluster here"; a **mixture** is
+several blobs together (one phone has sub-varieties). So a GMM for `a1` is a
+handful of blobs scoring how well a slice matches. It is 1980s technology, not
+a neural net: CPU-trainable in hours, robust on modest data, but it models
+each phone somewhat in isolation, so it is a bit crude. This is the
+`mono → tri1 → tri2b → tri3b` ladder — the workhorse that does our forced
+alignment and has manufactured the 1.22 M stress labels so far.
+
+**TDNN = Time-Delay Neural Network** (the neural upgrade). "Time-delay" is the
+point: instead of scoring each slice alone, it looks at a **window of
+neighbouring slices together**, because a sound is defined partly by its
+surroundings — the "a" in *мама* genuinely differs from the "a" in *врата*,
+and a context-aware network captures that where a per-phone GMM cannot. It is
+a real neural net: richer patterns, but needs more data and trains on the
+**GPU** (hence the CUDA-13 rebuild). Crucially it is **not** trained from
+scratch on raw audio — it learns from the alignments the GMM already produced
+as its answer key.
+
+**Why both, in order** — like focusing a lens in two passes: (1) the GMM is
+cheap, CPU, robust, and gets the audio roughly lined up with the words,
+yielding usable labels immediately; (2) the TDNN, trained on the GMM's
+alignments, produces *sharper* alignments, hence *cleaner, more trustworthy*
+stress labels. For us the payoff is precision: better alignment means the
+aligner's а́-vs-а choice at each homograph is more reliable, so the labels
+feeding the Accentor are better. That is exactly what milestone-A stage 6
+buys — replacing the good-enough GMM labels with better TDNN labels before the
+final Accentor training. (Forced alignment itself — the Viterbi search over
+the pronunciation-variant FST — is the same operation under either model; the
+TDNN only makes the acoustic scores it searches over more accurate.)
+
 ## Stage 5 — Kaldi alignment (pilot = audiobooks; parliament joins later)
 
 One-time Kaldi install (CPU build; OpenBLAS `TARGET=HASWELL USE_LOCKING=1
