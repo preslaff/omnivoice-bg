@@ -123,9 +123,21 @@ over aligner-localized vowel spans as a second judge.
    - **Arbiter**: third opinion on Accentor-uncertain sentences and on
      8/8-disobedience flags from the bon audit (few-token verdicts —
      CPU latency is irrelevant here).
-   Validation gate before any investment: few-shot the 14 border
-   homographs + the 8/8-disobedience sentences (steam-па́ра, noun-че́та,
-   imperative-учи́); adopt only if it clears them.
+   **Validation gate — run 2026-07-15, two-phase result:**
+   - Direct stress-notation prompting **FAILED 15/28** (`bggpt_validate.py`):
+     BgGPT picks one fixed reading per word type, context-blind, sometimes
+     the wrong one (моли́, ко́са for hair, си́нът). Root cause: BG
+     orthography never writes stress, so no text-trained LLM has a
+     context→U+0301 mapping.
+   - Sense-disambiguation prompting **PASSED 12/12** on the very same
+     items (`bggpt_validate2.py`): asked "аорист или повелително?" /
+     "дружина или глагол?" with glossed (а)/(б) options, it was flawless.
+   **Adopted design (two-step):** BgGPT decides the SENSE, the lexicon
+   supplies the MARK — the model never sees stress notation. New curation
+   artifact required: a per-homograph **sense inventory** (gloss pairs as
+   in bggpt_validate2.py) covering tier-3 + P5-discovered homographs;
+   one-time, native-checkable. Teacher pipeline: chitanka sentence →
+   BgGPT sense (few-token а/б) → lexicon mark → Accentor training row.
    **Rejected as TTS backbone**: swapping Qwen3→BgGPT discards the audio
    weights (TTS + in-context cloning live in the trained weights, not the
    architecture) and ~2.6 B doesn't full-fine-tune on the 16 GB card —

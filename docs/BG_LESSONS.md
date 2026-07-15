@@ -115,3 +115,12 @@ prerequisite guards.
 review.** промените's correct contextual reading (проме́ните), боя's
 pinning, tier-2 exclusions, and the pending по́-добре́ double-stress call
 were all judgment calls no metric could make.
+
+**L17a — LLMs know the sense, not the sound: route phonology through
+semantics.** BgGPT-Gemma-3-27B scored 15/28 when asked for the stressed
+form directly (context-blind per-word answers — orthography never writes
+stress, so no text→U+0301 mapping exists in any text-trained LLM), but
+**12/12** on the identical sentences reformulated as word-sense/grammar
+questions with glossed options. If a task looks phonological, decompose
+it: let the LLM make the semantic decision it was actually trained for,
+and keep the sense→pronunciation mapping in a lexicon you control.
