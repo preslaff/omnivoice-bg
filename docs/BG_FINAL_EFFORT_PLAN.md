@@ -264,3 +264,37 @@ best-of-N) and P5 (judge lexicon) are independent — buildable **now**,
 before the crawl finishes. The RAFT data generation (P4.2–3) can also be
 prototyped early against the existing bon_eval labels, but per the guide's
 sequencing discipline the RAFT *training* runs only on the post-P3 base.
+
+## 6. Steady state after milestone A: the model is a fixed label factory
+
+Milestone A is a **one-time** build of the acoustic model; feeding it more
+data afterwards is **incremental**, not a restart. The distinction rests on
+finding F2 — alignment models saturate at a few hundred hours (the 63 h GMM
+aligned the full 400 h cleanly, log-lik −45.8), so once tri4b + the annotation
+TDNN exist they are a *fixed label factory*: more parliament audio buys more
+homograph **tokens/contexts** (pushing more F4-wall classes over), not a better
+aligner.
+
+**Two regimes, opposite incrementality:**
+
+- **More labels (the routine case) — no retrain.** New crawl sessions run
+  through the *existing* models only: `harvest_new_sessions.sh` diffs the
+  manifest against already-harvested session ids, then segments (tri2b_comb
+  seed) → cleans (tri4b) → hires MFCC → TDNN-aligns (tdnn_a) → harvests the
+  new sessions to a tagged, **disjoint** `stress_labels_incr_<tag>.jsonl` that
+  stacks with `stress_labels_milestone_a.jsonl`. Then: native spot-vet the new
+  boundary tokens → rebuild the Accentor set over all `stress_labels_*.jsonl`
+  → retrain the ~40 min Accentor → (F9) re-mark + refresh the TTS. The
+  acoustic model is never touched.
+
+- **A better aligner (milestone decision) — full retrain.** Only worth it at
+  a deliberate "milestone B" (e.g. another ~400 h banked, or a genuinely new
+  domain the fixed model aligns poorly). Plain "more parliament" never
+  triggers this.
+
+**Caveat.** The incremental path assumes same-domain audio (parliament speech,
+same stenogram register). A different source (radio, other register) may align
+worse and argue for a retrain — but that is a domain judgement, not a volume
+one. `harvest_new_sessions.sh` is drafted (stage-resumable) but UNTESTED until
+milestone A finishes and new sessions are banked; watch its first run
+(stage-0 session diff, stage-1 `prep_kaldi_data --long-set`).
