@@ -36,3 +36,13 @@ examples/exp*
 hf-key.txt
 *.log
 /eval_*/
+
+# --- publication hygiene: never commit reference material or voice assets ---
+# Copyrighted reference documents (grammar books, papers) — for local use only.
+*.pdf
+*.djvu
+# Reference voice sample + its transcript (cloning asset, not for public repo).
+/Viktoria/
+viktoria_bg.txt
+# Stray local binary / scratch that slipped into the tree.
+/sqlite3
