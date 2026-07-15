@@ -1,0 +1,290 @@
+{
+  "_comment": "Per-homograph SENSE INVENTORY for the BgGPT teacher/arbiter (plan §P2.5, adopted after the 2026-07-15 gate: direct stress prompting FAILED 15/28, sense-disambiguation PASSED 12/12 — bggpt_validate2.py). Design: BgGPT decides the SENSE (few-token а/б/в answer over the glosses below), the lexicon supplies the MARK. The model never sees stress notation.",
+  "_format": "surface (unmarked, lowercase) -> {senses: [{id, gloss, marked, example}], status, notes}. Every `marked` value MUST exist among the alignment lexicon's variants for the surface form (checked 2026-07-15). gloss = the option text shown to BgGPT, Bulgarian, self-contained. example = a disambiguating sentence for few-shot use.",
+  "_grammar_note": "The -и verb family is systematic but ASYMMETRIC: IMPERFECTIVE verbs (говоря, ходя, уча, нося, моля, правя) stress the ending in BOTH imperative and aorist (ходи́!, вчера той ходи́) — one gloss covers both. PERFECTIVE verbs (купя) stress the ROOT in aorist (вчера ку́пи) and the ending in imperative (купи́!) — the two must be separate senses.",
+  "_excluded": "още/ако/между (tier-2 weak words, pending native ruling — suppression candidates, not homographs); синът (not a homograph: синъ́т is the only standard reading — override case, see bg_stress_overrides.json).",
+  "inventory": {
+    "говори": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "сегашно време, 3 л. ед.ч. (той говори сега) — ВКЛЮЧИТЕЛНО след 'да' (обича да ходи, иска да учи)",
+          "marked": "гово́ри",
+          "example": "Той говори тихо по телефона всяка вечер."
+        },
+        {
+          "id": "б",
+          "gloss": "повелително наклонение (заповед: говори!) ИЛИ минало свършено време (снощи той говори дълго)",
+          "marked": "говори́",
+          "example": "Говори по-високо, защото не те чувам!"
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item. Lexicon also holds го́вори — unattested in the harvest; likely G2P noise, do not offer as a sense (native review welcome)."
+    },
+    "чета": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "въоръжена група, дружина (съществително: хайдушка чета)",
+          "marked": "че́та",
+          "example": "Хайдушката чета премина тайно през планината."
+        },
+        {
+          "id": "б",
+          "gloss": "глаголът 'чета' — чета книга, 1 л. ед.ч.",
+          "marked": "чета́",
+          "example": "Всяка вечер чета по една глава от книгата."
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item. The noun is rare in modern prose — mine adjective+чета contexts (хайдушка, партизанска, въстаническа...) per plan §P2.4."
+    },
+    "против": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "предлог/наречие 'срещу' (гласувам против)",
+          "marked": "проти́в",
+          "example": "Той гласува против предложението."
+        },
+        {
+          "id": "б",
+          "gloss": "друго ударение (про́тив)",
+          "marked": "про́тив",
+          "example": ""
+        }
+      ],
+      "status": "needs_native_review",
+      "notes": "Tier-3 word but the sense split is UNCLEAR to me — both lexicon variants exist, yet против may not be a true sense-homograph (could be prosodic variation). Native must define the split or demote the word to a single reading."
+    },
+    "вълна": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "материал от овца, прежда (овча вълна)",
+          "marked": "въ́лна",
+          "example": "Пуловерът е изплетен от мека овча вълна."
+        },
+        {
+          "id": "б",
+          "gloss": "морска вълна, вълнение ИЛИ преносно: вълна от чувства, вълна от протести, нова вълна",
+          "marked": "вълна́",
+          "example": "Огромна вълна заля скалите на брега."
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item; battery-vetted 2026-07-04. Class-B TTS target too (model prefers вълна́ in both contexts)."
+    },
+    "пара": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "водна пара, изпарение",
+          "marked": "па́ра",
+          "example": "От тенджерата се вдигаше гъста пара."
+        },
+        {
+          "id": "б",
+          "gloss": "монета, дребни пари (пукната пара)",
+          "marked": "пара́",
+          "example": "Той нямаше пукната пара в джоба си."
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item; battery-vetted. The Accentor (ft5b) marked steam as пара́ — a confirmed class-C error this inventory exists to fix."
+    },
+    "коса": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "коса на главата, косъм",
+          "marked": "коса́",
+          "example": "Тя реши дългата си коса пред огледалото."
+        },
+        {
+          "id": "б",
+          "gloss": "наклонена, полегата (прилагателно: коса черта, коса светлина)",
+          "marked": "ко́са",
+          "example": "Напиши адреса с коса черта между двете имена."
+        },
+        {
+          "id": "в",
+          "gloss": "сечиво за косене на трева",
+          "marked": "коса́",
+          "example": "Наточи косата преди жътва."
+        }
+      ],
+      "status": "needs_native_review",
+      "notes": "Senses а/б validated by the gate; sense в (scythe) marking is my guess (коса́ like hair?) — native must confirm. Note b is the adjective ко́с in feminine form."
+    },
+    "само": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "наречие 'единствено, просто' (искам само една минута)",
+          "marked": "са́мо",
+          "example": "Искам само една минута от времето ти."
+        },
+        {
+          "id": "б",
+          "gloss": "самичко, без придружител (остана само)",
+          "marked": "само́",
+          "example": "Детето остана само вкъщи цяла вечер."
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item. F4 case study: само́ learned at ~100:1 ratio."
+    },
+    "моли": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "сегашно време, 3 л. ед.ч. (той моли сега) — ВКЛЮЧИТЕЛНО след 'да' (обича да ходи, иска да учи)",
+          "marked": "мо́ли",
+          "example": "Той моли за прошка всеки път, когато сгреши."
+        },
+        {
+          "id": "б",
+          "gloss": "повелително наклонение (моли се!) ИЛИ минало свършено време (вчера тя моли дълго)",
+          "marked": "моли́",
+          "example": "Моли се да не завали."
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item (BgGPT direct-stress got this one WRONG — chose моли́ for present; the sense route fixed it)."
+    },
+    "носи": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "сегашно време, 3 л. ед.ч. (тя носи сега) — ВКЛЮЧИТЕЛНО след 'да' (обича да ходи, иска да учи)",
+          "marked": "но́си",
+          "example": "Тя носи тежка чанта всеки ден."
+        },
+        {
+          "id": "б",
+          "gloss": "повелително наклонение (носи!) ИЛИ минало свършено време (вчера той носи багажа)",
+          "marked": "носи́",
+          "example": "Носи багажа до колата, моля те."
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item."
+    },
+    "прави": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "сегашно време, 3 л. ед.ч. (той прави сега) ИЛИ прилагателно 'прави' (прави линии) — ВКЛЮЧИТЕЛНО след 'да' (обича да ходи, иска да учи)",
+          "marked": "пра́ви",
+          "example": "Той прави всичко възможно, за да помогне."
+        },
+        {
+          "id": "б",
+          "gloss": "повелително наклонение (прави каквото ти казвам!) ИЛИ минало свършено време",
+          "marked": "прави́",
+          "example": "Прави каквото ти казвам и няма да съжаляваш."
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item. F4 case study (flipped at ~99 tokens); class-B TTS target (prior refuses прави́ 0/8)."
+    },
+    "купи": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "минало свършено време (аорист: вчера тя купи хляб) ИЛИ сегашно след 'да' (отиде да купи хляб)",
+          "marked": "ку́пи",
+          "example": "Вчера тя купи хляб и мляко от магазина."
+        },
+        {
+          "id": "б",
+          "gloss": "повелително наклонение (купи билети!)",
+          "marked": "купи́",
+          "example": "Купи билети за концерта още днес."
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item. PERFECTIVE verb — aorist stresses the ROOT (ку́пи), unlike the imperfective -и verbs; see _grammar_note."
+    },
+    "учи": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "сегашно време, 3 л. ед.ч. (той учи медицина) — ВКЛЮЧИТЕЛНО след 'да' (обича да ходи, иска да учи)",
+          "marked": "у́чи",
+          "example": "Синът им учи медицина в София."
+        },
+        {
+          "id": "б",
+          "gloss": "повелително наклонение (учи всеки ден!) ИЛИ минало свършено време",
+          "marked": "учи́",
+          "example": "Учи всеки ден, ако искаш да изкараш изпита."
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item. The Accentor (ft5b) marked the imperative as у́чи — confirmed class-C error."
+    },
+    "ходи": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "сегашно време, 3 л. ед.ч. (тя ходи на работа) — ВКЛЮЧИТЕЛНО след 'да' (обича да ходи, иска да учи)",
+          "marked": "хо́ди",
+          "example": "Тя ходи на работа пеша всяка сутрин."
+        },
+        {
+          "id": "б",
+          "gloss": "повелително наклонение (ходи по-бързо!) ИЛИ минало свършено време",
+          "marked": "ходи́",
+          "example": "Ходи по-бързо, че ще закъснеем!"
+        }
+      ],
+      "status": "validated",
+      "notes": "Gate 12/12 item. F4 amendment case (cross-verb transfer at 3 tokens); class-B TTS target (prior refuses ходи́ 0/8)."
+    },
+    "боя": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "боя за боядисване (съществително: боя за стените)",
+          "marked": "боя́",
+          "example": "Купих боя за стените."
+        },
+        {
+          "id": "б",
+          "gloss": "глаголът 'боя се' — страхувам се",
+          "marked": "боя́",
+          "example": "Не се боя от нищо."
+        },
+        {
+          "id": "в",
+          "gloss": "бой, битка (съществително: в разгара на боя)",
+          "marked": "бо́я",
+          "example": "Войниците се завърнаха от боя уморени."
+        }
+      ],
+      "status": "validated",
+      "notes": "Senses а/б share the mark боя́ (teacher output identical — the split exists for arbiter explainability). Sense в (бо́я = the fight, definite of бой) native-pinned earlier; NOT automatic — offer all three."
+    },
+    "промените": {
+      "senses": [
+        {
+          "id": "а",
+          "gloss": "съществително с член — промените, нещата които са се променили (запишете промените)",
+          "marked": "проме́ните",
+          "example": "Запишете промените, преди да затворите приложението."
+        },
+        {
+          "id": "б",
+          "gloss": "глагол, 2 л. мн.ч. (ако промените решението си)",
+          "marked": "промени́те",
+          "example": "Ако промените мнението си, обадете се."
+        }
+      ],
+      "status": "validated",
+      "notes": "Native-established 2026-07 (the TrainGen complaint word): the noun reading is проме́ните, NOT про́мените."
+    }
+  }
+}
