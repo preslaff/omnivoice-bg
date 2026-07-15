@@ -45,6 +45,9 @@ stage=${stage:-0}
 stop_stage=${stop_stage:-99}
 nj=${nj:-$(nproc)}
 seg_nj=${seg_nj:-8}                    # memory-bound (guide Pitfall 1)
+seg_stage=${seg_stage:--1}             # inner stage of segment_long_utterances;
+                                       # set 5 to resume past a completed decode
+                                       # (lats/lat.*.gz already written)
 egs_jobs=${egs_jobs:-8}                # egs generation is IO+RAM heavy
 min_parl_hours=${min_parl_hours:-400}  # volume gate (milestone A ~ 500 h raw)
 KALDI_ROOT=${KALDI_ROOT:?set KALDI_ROOT to your kaldi checkout}
@@ -94,10 +97,16 @@ fi
 
 if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
   echo "=== stage 2: segment the FULL parliament crawl (seed = tri2b_comb) ==="
-  steps/make_mfcc.sh --nj $seg_nj --cmd "$train_cmd" data/parl exp/make_mfcc/parl mfcc
-  steps/compute_cmvn_stats.sh data/parl exp/make_mfcc/parl mfcc
-  utils/fix_data_dir.sh data/parl
-  steps/cleanup/segment_long_utterances.sh --nj $seg_nj --cmd "$train_cmd" \
+  # MFCC/CMVN skip if already computed (e.g. resuming after a segmentation
+  # failure — the 12 h decode's features must not be recomputed).
+  if [ ! -f data/parl/feats.scp ]; then
+    steps/make_mfcc.sh --nj $seg_nj --cmd "$train_cmd" data/parl exp/make_mfcc/parl mfcc
+    steps/compute_cmvn_stats.sh data/parl exp/make_mfcc/parl mfcc
+    utils/fix_data_dir.sh data/parl
+  fi
+  # --stage $seg_stage lets a resume skip the completed decode (set seg_stage=5).
+  steps/cleanup/segment_long_utterances.sh --nj $seg_nj --stage $seg_stage \
+      --cmd "$train_cmd" \
       exp/tri2b_comb data/lang data/parl data/parl_seg3 exp/segment_parl3
   utils/fix_data_dir.sh data/parl_seg3
   echo "--- segmentation yield (round-2 benchmark: 79%) ---"
