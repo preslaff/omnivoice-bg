@@ -119,9 +119,47 @@ def mine(corpus, words, min_chars, max_chars, min_words, oversample, rng):
     return cands
 
 
+def mine_from_file(path, words, min_chars, max_chars, min_words, per_word, rng):
+    """Targeted source: read pre-mined sentences from a JSONL (`text` field,
+    e.g. data/chitanka/imperatives.jsonl) instead of scanning books. Same
+    proper-name guard. Use to top up senses that random prose starves
+    (imperatives, rare nouns) — mine_homographs finds candidates, BgGPT
+    confirms the sense here, so only agreed rows survive."""
+    cands = {w: [] for w in words}
+    seen = set()
+    for line in open(path, encoding="utf-8"):
+        line = line.strip()
+        if not line:
+            continue
+        sent = json.loads(line).get("text", "").strip()
+        if not (min_chars <= len(sent) <= max_chars):
+            continue
+        toks = WORD_RE.findall(sent.lower())
+        if len(toks) < min_words:
+            continue
+        raw_toks = set(WORD_RE.findall(sent))
+        first = sent.lstrip('—–-«„"\' ').split(' ', 1)[0].strip('.,!?…:;').lower()
+        for w in words:
+            if w in toks and (w in raw_toks or w == first):
+                key = (w, sent)
+                if key not in seen:
+                    seen.add(key)
+                    cands[w].append(sent)
+    for w in cands:
+        rng.shuffle(cands[w])
+        cands[w] = cands[w][:per_word]
+    return cands
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--corpus", default="data/chitanka")
+    ap.add_argument("--sentences", default=None,
+                    help="targeted round: read pre-mined sentences from this "
+                         "JSONL (`text` field, e.g. "
+                         "data/chitanka/imperatives.jsonl) instead of scanning "
+                         "the book corpus. Resumes into --out, so it tops up "
+                         "starved senses without redoing the random sweep.")
     ap.add_argument("--inventory", default="config/bg/sense_inventory.json")
     ap.add_argument("--url", default="http://localhost:8080")
     ap.add_argument("--out", default="data/bggpt_teacher/sense_rows.jsonl")
@@ -153,11 +191,17 @@ def main():
              if skipped_words else ""))
 
     rng = random.Random(args.seed)
-    cands = mine(args.corpus, list(words), args.min_chars, args.max_chars,
-                 args.min_words, oversample=args.per_word * 3, rng=rng)
-    for w in cands:
-        rng.shuffle(cands[w])
-        cands[w] = cands[w][:args.per_word]
+    if args.sentences:
+        print(f"targeted round: mining from {args.sentences}")
+        cands = mine_from_file(args.sentences, list(words), args.min_chars,
+                               args.max_chars, args.min_words,
+                               args.per_word, rng)
+    else:
+        cands = mine(args.corpus, list(words), args.min_chars, args.max_chars,
+                     args.min_words, oversample=args.per_word * 3, rng=rng)
+        for w in cands:
+            rng.shuffle(cands[w])
+            cands[w] = cands[w][:args.per_word]
     print("mined candidates: " +
           " ".join(f"{w}:{len(c)}" for w, c in sorted(cands.items())))
     if args.dry_run:
