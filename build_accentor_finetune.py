@@ -48,8 +48,17 @@ from mark_chitanka_text import apply_mark, load_function_words, load_lexicon
 from select_chitanka_sentences import WORD_RE
 
 # Vetting 2026-07-05: GMM final-stress bias class — corpus counts untrustworthy.
-TIER2_EXCLUDE = {"може", "всички", "съюз", "вече", "още", "един", "една",
-                 "или", "колеги", "между"}
+# Milestone-A re-vetting (2026-07-16, TDNN labels): the split resolved by
+# WORD CLASS, not by aligner majority —
+#   * PROMOTED (removed): може→мо́же, всички→вси́чки were content words with
+#     real lexical stress; the TDNN + veto now give them clean single-stress
+#     (мо́же/вси́чки 100% vetted). други→дру́ги likewise clean (never listed;
+#     its harvest majority други́ 59% was inverted noise — F3 — the veto drops it).
+#   * KEPT/ADDED: като is a proclitic function word whose "stress" is a phrasal
+#     artifact (като́ 100%/ка́то 14% is prominence leaking to the following
+#     stressed word, NOT lexical) — same trap as и́ли/ме́жду; suppress.
+TIER2_EXCLUDE = {"съюз", "вече", "още", "един", "една",
+                 "или", "колеги", "между", "като"}
 # Battery-confirmed + vetting-confirmed contextual homographs (both readings
 # real). Grows as more classes are vetted. The -и verbs are the
 # imperative(final-stress) vs 3sg-present(root-stress) class: говори́!/гово́ри,
