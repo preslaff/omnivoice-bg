@@ -34,7 +34,7 @@
 #
 # Memory (60 GB box — guide Pitfall 1): segmentation stays at seg_nj=8 (one
 # session transcript per biased-LM job); the GMM ladder and MFCC use full nj
-# (dict is vocab-limited); TDNN egs generation is bounded via --max-jobs-run.
+# (dict is vocab-limited); TDNN egs generation is bounded via get_egs --nj.
 #
 # Usage:   KALDI_ROOT=~/kaldi bash kaldi_milestone_a.sh
 # Resume:  KALDI_ROOT=~/kaldi stage=N bash kaldi_milestone_a.sh
@@ -184,11 +184,15 @@ if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
 --low-freq=20
 --high-freq=-400
 EOF
-  utils/copy_data_dir.sh data/train_cleaned data/train_cleaned_hires
-  steps/make_mfcc.sh --nj $nj --mfcc-config conf/mfcc_hires.conf \
-      --cmd "$train_cmd" data/train_cleaned_hires exp/make_mfcc/train_cleaned_hires mfcc
-  steps/compute_cmvn_stats.sh data/train_cleaned_hires exp/make_mfcc/train_cleaned_hires mfcc
-  utils/fix_data_dir.sh data/train_cleaned_hires
+  # Hires MFCC skips if already computed (e.g. resuming after a TDNN-train
+  # failure — no need to recompute ~750 h of features).
+  if [ ! -f data/train_cleaned_hires/feats.scp ]; then
+    utils/copy_data_dir.sh data/train_cleaned data/train_cleaned_hires
+    steps/make_mfcc.sh --nj $nj --mfcc-config conf/mfcc_hires.conf \
+        --cmd "$train_cmd" data/train_cleaned_hires exp/make_mfcc/train_cleaned_hires mfcc
+    steps/compute_cmvn_stats.sh data/train_cleaned_hires exp/make_mfcc/train_cleaned_hires mfcc
+    utils/fix_data_dir.sh data/train_cleaned_hires
+  fi
 
   # TDNN xconfig — modest (~10M params): the job is alignment fidelity on
   # in-domain speech, not open-vocabulary decoding. Splicing follows the
@@ -217,7 +221,7 @@ EOF
       --trainer.optimization.initial-effective-lrate 0.0015 \
       --trainer.optimization.final-effective-lrate 0.00015 \
       --trainer.optimization.minibatch-size 256,128 \
-      --egs.dir "" --egs.opts "--max-jobs-run $egs_jobs" \
+      --egs.dir "" --egs.opts "--nj $egs_jobs" \
       --use-gpu=true \
       --feat-dir data/train_cleaned_hires \
       --ali-dir exp/tri4b_ali_cleaned \
