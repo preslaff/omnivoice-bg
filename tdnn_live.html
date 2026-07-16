@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Milestone-A TDNN — live</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px; background: #111; color: #ddd; }
+  h3 { font-weight: 500; }
+  img { max-width: 100%; background: #fff; border-radius: 8px; }
+  #ts { color: #888; font-size: 13px; }
+</style>
+</head>
+<body>
+  <h3>Milestone-A TDNN training <span id="ts"></span></h3>
+  <img id="p" src="tdnn_progress.png" alt="regenerate the PNG with plot_tdnn_progress.py">
+<script>
+  // Reload the PNG every 20 s with a cache-busting query so the browser
+  // fetches the freshly-regenerated image (the loop rewrites the file).
+  function refresh() {
+    document.getElementById('p').src = 'tdnn_progress.png?' + Date.now();
+    document.getElementById('ts').textContent =
+        '(updated ' + new Date().toLocaleTimeString() + ')';
+  }
+  refresh();
+  setInterval(refresh, 20000);
+</script>
+</body>
+</html>
