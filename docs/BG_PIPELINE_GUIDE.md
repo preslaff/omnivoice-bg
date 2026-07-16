@@ -1192,6 +1192,20 @@ doesn't write stress). Full design + the ASR-circularity trap:
    different (inaudible) device** while `paplay` was audible — programs that
    must be heard should play through `paplay` (PipeWire default sink,
    directly); `vet_stress_cli.py` does since 2026-07-05.
+11. **Neural (nnet3) alignment: try `--use-gpu true` next time (milestone-A
+    lesson, 2026-07-16).** For the *GMM* aligner, CPU with high `nj` wins —
+    acoustic scoring is cheap and the FST/Viterbi search dominates. For a
+    *neural* aligner the opposite holds: the **12.3M-param TDNN forward pass
+    is the bottleneck**, and on CPU it is heavy — milestone-A stage 7 aligned
+    the 750 h cleaned set with `steps/nnet3/align.sh --use-gpu false` (Kaldi
+    default, 24 CPU jobs) and it ran ~2.5–3 h. `nnet3-align-compiled` also
+    logs nothing per-utterance and writes `ali.*.gz` in bursts, so progress
+    is invisible mid-run (watch for the files jumping to full size, not
+    incremental growth — it is NOT stalled if CPU-time keeps accruing at
+    ~95%). Next time (milestone B, `harvest_new_sessions.sh`) try
+    `--use-gpu true`: fewer jobs, but each runs the forward on the GPU, which
+    may beat 24 CPU jobs since the forward dominates. The GPU must be free
+    (evict llama.cpp/BgGPT first).
 
 ## File map (added by this project)
 
