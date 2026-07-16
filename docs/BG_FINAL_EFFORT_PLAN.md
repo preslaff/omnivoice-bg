@@ -80,6 +80,26 @@ milestone-A, not months. Uses, in priority order:
    domain-tuned ASR only wins on new unlabeled in-domain audio.
 Nothing in P1–P6 depends on this — build it only after the cycle lands.
 
+**Architecture note — Zipformer/icefall for the ASR, TDNN stays for the
+aligner (recorded 2026-07-16).** The milestone-A **TDNN is the right tool
+for label manufacturing** and should NOT be swapped: forced alignment is
+transcript-constrained (F2 saturation — a stronger acoustic model barely
+moves alignment quality), and the TDNN's *bounded* context gives crisper
+10 ms phone boundaries than a long-memory LSTM or a Transformer — boundary
+precision is the whole game for the stress harvest. But the ASR byproduct
+is **free decoding**, where acoustic-model power does matter, and there the
+modern choice is a **Zipformer in icefall/k2** (CTC or pruned RNN-T). Nice
+coherence: **icefall is k2-fsa — the same group behind OmniVoice**, so a
+"modern k2 stack" (Zipformer ASR + OmniVoice TTS) is self-consistent. The
+milestone-A assets transfer directly: the 740 h cleaned+aligned corpus and
+the 115 K lexicon are exactly icefall's inputs; only an n-gram/neural LM
+must be added. Effort is a framework port (k2 paradigm), justified only if
+the ASR is pursued as its own deliverable — never as a mid-flight swap of
+the working Kaldi label pipeline. (Transformer/LSTM were both weighed for
+the aligner and rejected: Transformer-CTC can't do the pronunciation-
+variant FST fork; LSTM smears boundaries. The Accentor itself already uses
+Transformer-style FFT blocks — architecture is chosen per task.)
+
 **Feature upgrade decision (do at P1, free while retraining anyway):**
 add Kaldi pitch features (`steps/make_mfcc_pitch.sh`, +3 dims: F0/voicing/
 ΔF0) — Bulgarian stress is realized via pitch movement that plain MFCC
