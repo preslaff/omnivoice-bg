@@ -118,9 +118,12 @@ over aligner-localized vowel spans as a second judge.
 2. Targeted vetting: every class-B word (пара́, чета́, прави́, ходи́,
    сгреши́, пеша́ …) gets a `vet_stress_cli.py --per-variant` pass; verdicts
    append to `vetting_results.jsonl` (veto is cumulative).
-3. `build_accentor_finetune.py` with the veto; **new**: emit an
-   inference-suppression list from tier-2 (fix weak-word marking at the
-   source).
+3. `build_accentor_finetune.py` with the veto; **DONE 2026-07-16**: the
+   inference-suppression list (L9 twin of tier-2) is wired via UNMARKED
+   entries in `bg_stress_overrides.json` (като/ако/още/между/или) — the
+   existing override mechanism strips any model mark; zero new code, and
+   since mark_tts_txts/serve/eval all share the file, F9 consistency is
+   automatic. Pins (marked entries) beat suppression.
 4. Targeted context mining for the confirmed class-C homograph errors:
    steam-па́ра, noun-че́та (adjective+чета patterns), imperative-учи́ —
    these need training *contexts*, not overrides.

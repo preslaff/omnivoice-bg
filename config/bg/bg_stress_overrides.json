@@ -65,5 +65,11 @@
   "опишете": "опише́те",
   "стои": "стои́",
   "обмислен": "обми́слен",
-  "промените": "проме́ните"
+  "промените": "проме́ните",
+  "_comment_suppression": "entries below with NO acute = inference suppression list (L9): prosodically weak words the model must never mark; vetting 2026-07-16 (като/между/или proclitic phrasal artifact) + bon 8/8-disobedience (ако, още). Native can delete a line to re-enable marking.",
+  "като": "като",
+  "ако": "ако",
+  "още": "още",
+  "между": "между",
+  "или": "или"
 }
