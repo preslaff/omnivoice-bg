@@ -275,6 +275,11 @@ def main():
     parser.add_argument("--accent-threshold", type=float, default=0.5,
                         help="Accentor: min prob to place a stress mark")
     parser.add_argument("--overrides", default=None, help="JSON of word->stressed overrides")
+    parser.add_argument("--sparse-keep", default=None,
+                        help="JSON keep-list: SPARSE marking (mark only "
+                             "homographs + hard words + pins). Match the served "
+                             "TTS checkpoint's marking dialect (F9): use with a "
+                             "sparse-trained model, omit with a dense one.")
 
     # Optional alternative engine: BgTTS-38M-V2 (plain text, MioCodec cloning).
     parser.add_argument(
@@ -325,10 +330,12 @@ def main():
 
         accenter = AccentorAccenter(args.accentor, args.overrides,
                                     device="cpu",
-                                    threshold=args.accent_threshold)
+                                    threshold=args.accent_threshold,
+                                    sparse_keep=args.sparse_keep)
         logger.info("BG stress accenting ON — CONTEXTUAL Accentor "
-                    "(ckpt=%s step=%s, overrides=%s)",
-                    args.accentor, accenter.step, args.overrides)
+                    "(ckpt=%s step=%s, overrides=%s, marking=%s)",
+                    args.accentor, accenter.step, args.overrides,
+                    "sparse" if args.sparse_keep else "dense")
     elif args.lexicon:
         from bg_accent import BgAccenter  # repo-root module; run from repo root
 
