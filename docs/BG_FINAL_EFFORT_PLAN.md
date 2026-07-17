@@ -191,6 +191,33 @@ lives in the trained weights, not the architecture.
    triggered only when the marked text contains a judgeable boundary word
    (bounded latency; judge = oracle, so N=4–8 recovers class A
    immediately). Base-independent — ships before milestone A.
+
+**Rung 0.5 — judge-gated adaptive marking (adopted 2026-07-17, after the
+E3 sparse-dialect win).** The endpoint of "prior for the mass, marks for
+the tail": instead of a STATIC keep-list (E3's `sparse_keep.json` — a
+*guess* at which words are risky), MEASURE it per instance and mark only
+the words the TTS actually renders wrong. The loop reuses the bon
+machinery wholesale — it is `bon_score` inverted from scoring to acting:
+(a) synthesize the sentence UNMARKED (natural, bright, no over-
+articulation); (b) the Accentor supplies the *intended* reading per word;
+(c) the Kaldi judge reports the *actual* rendered stress (forced alignment
+over the multi-pronunciation lexicon); (d) mark only the mismatches,
+regenerate, re-judge. Marks land exactly where the prior failed and
+nowhere else — even sparser than the static list.
+Two caveats: (i) a mark triggers a WHOLE-sentence regeneration (diffusion,
+not a local edit), so it is an iterative sentence-level refinement loop
+(~1–2 passes to converge), not per-word surgery; (ii) homographs work with
+today's judge, but single-variant hard words (натиснете) need the P5
+all-variant judge lexicon — forced alignment force-fits one pronunciation
+otherwise and cannot detect a wrong-SYLLABLE rendering. Cost: 2–3×
+generate + align per sentence — fatal for low latency, invisible for
+OFFLINE BATCH (TrainGen narration, audiobooks), which is the actual
+deployment. This unifies three separate levers — sparse marking (which
+words), best-of-N (rung 0), and the judge — into one adaptive loop, and is
+the paper's strongest closing move: *the pipeline that manufactures the
+labels also decides, per word, whether a mark is even needed.* Sequencing:
+ship E3 STATIC sparse now (proven, zero runtime cost, ~90% of the
+benefit); build rung 0.5 next for the last 10% of naturalness.
 2. Scale `bon_generate.py` beyond the border set — **chitanka as the text
    source (adopted 2026-07-14)**: mine chitanka for sentences containing
    class-B words and rare homograph contexts (че́та-noun, imperative-ходи́
