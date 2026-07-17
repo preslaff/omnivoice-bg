@@ -26,8 +26,12 @@ PORT="${OMNIVOICE_BG_PORT:-8002}"
 SEED="${OMNIVOICE_BG_SEED:-42}"
 # Optional server-wide fixed voice. Leave REF_AUDIO empty to rely on the
 # fine-tuned model's default narrator voice and/or per-request client references.
-REF_AUDIO="${OMNIVOICE_BG_REF_AUDIO:-}"
-REF_TEXT="${OMNIVOICE_BG_REF_TEXT:-}"          # exact transcript of REF_AUDIO
+# Server-wide fixed voice (2026-07-18): the HOMEMAX ad announcer, validated
+# for ad narration. Raw master on purpose — the model auto-normalizes its
+# LEVEL (kills the scratch), and the deep produced character is DESIRABLE for
+# ads, so we do NOT neutral-condition it (that would strip the ad voice).
+REF_AUDIO="${OMNIVOICE_BG_REF_AUDIO:-examples/reklama_home_max.wav}"
+REF_TEXT="${OMNIVOICE_BG_REF_TEXT:-$(cat examples/reklama_home_max.txt 2>/dev/null)}"
 # =========================================
 
 PY=./venv/bin/python
