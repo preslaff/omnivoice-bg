@@ -82,6 +82,33 @@ On the generated `book.wav`, re-apply the production you kept off the reference:
    done correctly on a clean source.
 4. **Music/SFX bed**: on a separate track, then mix.
 
+## The training corpus has a "microphone" too (dark-sibilance finding)
+
+Cloning inherits the *reference's* production — but the fine-tuned model also
+inherits the *training corpus's* spectral character, and ours is **dark**. The
+sivov (63 h) and bg400 (400 h) audiobook corpora sit at **1–2 % sibilance
+energy** in the 4–8 kHz band, versus **~10 %** for natural bright speech
+(stock OmniVoice output) — the narrator's source recordings are de-essed /
+dark-mic'd. A *long* fine-tune faithfully learns this darkness, which is a
+major cause of the muffled/scratchy ч/щ/с we chased: the 413 h/10 K-step
+scale-up collapsed output sibilance to ~1 %, while the shorter 63 h/3 K-step
+recipe (T5) stayed bright at ~8 %.
+
+Two takeaways:
+- **Level normalization would NOT have fixed this** — darkness is spectral,
+  not amplitude. (The training audio is actually clean level-wise: RMS
+  ~0.08–0.09, no clipping; only sivov has wide clip-to-clip variance.)
+- **T5-bright works by avoiding the problem** (fewer steps → less absorption of
+  the dark prior), not by fixing the corpus. To redo the *large* scale-up AND
+  keep it bright, pre-brighten the training audio before tokenization:
+  ```bash
+  python -m omnivoice.scripts.extract_audio_tokens ... --brighten 6 --brighten-fc 4000
+  ```
+  A +6 dB high-shelf lifts a bg400 clip from 0.9 % → 3.1 % sibilance at safe
+  peak (0.88); ~6 dB is the sweet spot (+9 dB reaches 5.4 % but clips). Then
+  re-tokenize and fine-tune — the pipeline supports this iteration (audio
+  tokens redo once, everything downstream is scripted).
+
 ## Why this works (the mechanism)
 
 In-context cloning has no separate "voice-identity" encoder to isolate timbre
