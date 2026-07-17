@@ -74,6 +74,8 @@ def main():
                          "marked:unmarked train mix makes sparse/plain "
                          "in-distribution on the existing model.")
     ap.add_argument("--sparse-keep", default="config/bg/sparse_keep.json")
+    ap.add_argument("--no-verbalize", action="store_true",
+                    help="skip number/date/currency expansion (bg_verbalize)")
     ap.add_argument("--overrides", default="config/bg/bg_stress_overrides.json")
     ap.add_argument("--out", default=None,
                     help="output dir (default reading/<book-stem>)")
@@ -101,6 +103,9 @@ def main():
         mark = acc.accent_text
     else:
         mark = lambda t: t          # plain text (bgtts, or --marking none)
+    if not args.no_verbalize and args.engine == "omnivoice":
+        from bg_verbalize import normalize as _verb
+        paras = [_verb(p) for p in paras]   # numbers -> words BEFORE marking
     chunks = []                     # (text_for_tts, paragraph_index)
     for pi, par in enumerate(paras):
         for piece in chunk_paragraph(par):

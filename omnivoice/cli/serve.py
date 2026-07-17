@@ -99,6 +99,7 @@ class SynthRequest(BaseModel):
     class_temperature: Optional[float] = None
     seed: Optional[int] = None
     accent: Optional[bool] = None  # Bulgarian stress marking; None = use server default
+    verbalize: Optional[bool] = None  # number/date/currency -> words; None = server default
     engine: Optional[str] = None  # "omnivoice" | "bgtts"; None = server default
 
 
@@ -115,6 +116,7 @@ def build_app(
     defaults: dict,
     default_prompt=None,
     accenter=None,
+    verbalizer=None,
     bgtts_engine=None,
     default_engine: str = "omnivoice",
 ) -> FastAPI:
@@ -170,10 +172,12 @@ def build_app(
             sf.write(buf, audio, SAMPLING_RATE, format="WAV")
             return Response(content=buf.getvalue(), media_type="audio/wav")
 
-        # Bulgarian stress marking (server-side). Only touches Cyrillic words.
+        # Bulgarian text normalization + stress marking (server-side).
         text = req.text
+        if verbalizer is not None and req.verbalize is not False:
+            text = verbalizer(text)     # numbers/dates/currency -> words FIRST
         if accenter is not None and req.accent is not False:
-            text = accenter.accent_text(text)
+            text = accenter.accent_text(text)   # then mark the resulting words
 
         kwargs = {"text": text}
 
@@ -280,6 +284,10 @@ def main():
                              "homographs + hard words + pins). Match the served "
                              "TTS checkpoint's marking dialect (F9): use with a "
                              "sparse-trained model, omit with a dense one.")
+    parser.add_argument("--no-verbalize", action="store_true",
+                        help="disable Bulgarian number/date/currency expansion "
+                             "(bg_verbalize); on by default — the TTS drops "
+                             "parts of long digit strings otherwise")
 
     # Optional alternative engine: BgTTS-38M-V2 (plain text, MioCodec cloning).
     parser.add_argument(
@@ -340,6 +348,11 @@ def main():
         from bg_accent import BgAccenter  # repo-root module; run from repo root
 
         accenter = BgAccenter(args.lexicon, args.overrides)
+
+    verbalizer = None
+    if not args.no_verbalize:
+        from bg_verbalize import normalize as verbalizer  # numbers -> words
+        logger.info("BG text normalization ON (numbers/dates/currency -> words)")
         logger.info("BG stress accenting ON — rechko lexicon "
                     "(lexicon=%s, overrides=%s)", args.lexicon, args.overrides)
 
@@ -364,7 +377,7 @@ def main():
     )
     logger.info("Serving on http://%s:%d", args.host, args.port)
 
-    app = build_app(model, defaults, default_prompt, accenter, bgtts_engine, args.default_engine)
+    app = build_app(model, defaults, default_prompt, accenter, verbalizer, bgtts_engine, args.default_engine)
     uvicorn.run(app, host=args.host, port=args.port, workers=1)
 
 
