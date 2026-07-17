@@ -59,7 +59,12 @@ def chunk_paragraph(par, max_chars=220):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--book", required=True)
+    ap.add_argument("--engine", default="omnivoice",
+                    choices=["omnivoice", "bgtts"],
+                    help="bgtts = the 38M end-to-end engine: PLAIN text (its "
+                         "own implicit stress), speaker-embedding cloning")
     ap.add_argument("--model", default="exp/omnivoice_bg_ft6b/checkpoint-3000")
+    ap.add_argument("--bgtts-dir", default="models/bgtts-38m")
     ap.add_argument("--accentor", default="exp/accentor_ft6b/last.pt")
     ap.add_argument("--overrides", default="config/bg/bg_stress_overrides.json")
     ap.add_argument("--out", default=None,
@@ -78,14 +83,18 @@ def main():
     out = pathlib.Path(args.out or f"reading/{book.stem}")
     (out / "chunks").mkdir(parents=True, exist_ok=True)
 
-    # --- text -> marked chunks (CPU) ---
-    from accentor_model import AccentorAccenter
-    acc = AccentorAccenter(args.accentor, args.overrides)
+    # --- text -> chunks (CPU); marked for omnivoice, PLAIN for bgtts ---
     paras = load_paragraphs(book)
-    chunks = []                     # (marked_text, paragraph_index)
+    if args.engine == "omnivoice":
+        from accentor_model import AccentorAccenter
+        acc = AccentorAccenter(args.accentor, args.overrides)
+        mark = acc.accent_text
+    else:
+        mark = lambda t: t          # BgTTS: implicit stress from plain text
+    chunks = []                     # (text_for_tts, paragraph_index)
     for pi, par in enumerate(paras):
         for piece in chunk_paragraph(par):
-            chunks.append((acc.accent_text(piece), pi))
+            chunks.append((mark(piece), pi))
     if args.max_chunks:
         chunks = chunks[: args.max_chunks]
     with open(out / "book_marked.txt", "w", encoding="utf-8") as f:
@@ -101,15 +110,25 @@ def main():
 
     if not args.finalize_only:
         import torch
-        from omnivoice import OmniVoice
-        if args.ref_audio:
-            ref_audio, ref_text = args.ref_audio, args.ref_text
-        else:
-            ref_audio, ref_text = pick_ref_from_dataset(args.train_jsonl)
         dev = "cuda:0" if torch.cuda.is_available() else "cpu"
-        dtype = torch.float16 if dev.startswith("cuda") else torch.float32
-        model = OmniVoice.from_pretrained(args.model, device_map=dev, dtype=dtype)
-        prompt = model.create_voice_clone_prompt(ref_audio, ref_text=ref_text)
+        if args.engine == "bgtts":
+            from omnivoice.cli.bgtts_engine import BgTTSEngine
+            eng = BgTTSEngine(args.bgtts_dir, args.ref_audio,
+                              device="cuda" if dev.startswith("cuda") else "cpu")
+            synth = lambda m: eng.synth(m)
+        else:
+            from omnivoice import OmniVoice
+            if args.ref_audio:
+                ref_audio, ref_text = args.ref_audio, args.ref_text
+            else:
+                ref_audio, ref_text = pick_ref_from_dataset(args.train_jsonl)
+            dtype = torch.float16 if dev.startswith("cuda") else torch.float32
+            model = OmniVoice.from_pretrained(args.model, device_map=dev, dtype=dtype)
+            prompt = model.create_voice_clone_prompt(ref_audio, ref_text=ref_text)
+            synth = lambda m: model.generate(text=m, voice_clone_prompt=prompt,
+                                             num_step=args.num_step,
+                                             position_temperature=0.0,
+                                             class_temperature=0.0)[0]
         done = skip = 0
         for i, (m, _) in enumerate(chunks):
             wav = out / "chunks" / f"{i:05d}.wav"
@@ -119,11 +138,7 @@ def main():
             torch.manual_seed(args.seed + i)
             if dev.startswith("cuda"):
                 torch.cuda.manual_seed_all(args.seed + i)
-            audio = model.generate(text=m, voice_clone_prompt=prompt,
-                                   num_step=args.num_step,
-                                   position_temperature=0.0,
-                                   class_temperature=0.0)
-            sf.write(str(wav), audio[0], 24000)
+            sf.write(str(wav), synth(m), 24000)
             done += 1
             if done % 10 == 0:
                 print(f"  {done + skip}/{len(chunks)} chunks", flush=True)
