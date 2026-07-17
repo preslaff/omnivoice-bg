@@ -1,0 +1,48 @@
+{
+    "train": [
+        {
+            "language_id": "bg",
+            "manifest_path": [
+                "data/bg400/tokens/train/data_sparse.lst"
+            ],
+            "repeat": 4
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": [
+                "data/bg400/tokens/train/data.lst"
+            ],
+            "repeat": 1
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": [
+                "data/bg/tokens/train/data_sparse.lst"
+            ],
+            "repeat": 4
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": [
+                "data/bg/tokens/train/data.lst"
+            ],
+            "repeat": 1
+        }
+    ],
+    "dev": [
+        {
+            "language_id": "bg",
+            "manifest_path": [
+                "data/bg400/tokens/dev/data_sparse.lst"
+            ],
+            "repeat": 1
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": [
+                "data/bg/tokens/dev/data_sparse.lst"
+            ],
+            "repeat": 1
+        }
+    ]
+}
