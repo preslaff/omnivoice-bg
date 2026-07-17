@@ -11,6 +11,7 @@ exists only on the training box — back it up accordingly.
 | `OMNIVOICE_BG.md` | Front page: architecture of the fork, serving, TrainGen integration |
 | `BG_FINETUNE_PLAN.md` | TTS fine-tune deep-dive (recipes, configs, A/B history) |
 | `docs/BG_PIPELINE_GUIDE.md` | Living stage-by-stage guide of the whole label→Accentor→TTS pipeline |
+| `docs/BG_VOICE_CLONING.md` | **Voice-cloning & production guide** — clean reference → clone → master the output; `prep_reference.py` |
 | `docs/BG_LESSONS.md` | **Distilled lessons L1–L16** (the education document) |
 | `docs/BG_FINAL_EFFORT_PLAN.md` | Plan for the milestone-A final effort (this cycle) |
 | `docs/BG_PARLIAMENT_INGESTION.md` | Parliament crawler design (enumeration, health probe, resume) |
