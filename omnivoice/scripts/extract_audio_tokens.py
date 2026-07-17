@@ -122,6 +122,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip_errors", action="store_true", help="Skip items that fail to process"
     )
     parser.add_argument(
+        "--brighten", type=float, default=0.0,
+        help="High-shelf boost (dB, e.g. 6) applied above --brighten-fc BEFORE "
+             "tokenization, to counteract a de-essed/dark training corpus "
+             "(sivov/bg400 sit at ~1-2%% sibilance vs ~10%% for natural "
+             "speech; a long fine-tune otherwise learns the darkness -> ч/щ/с "
+             "artifacts). 0 = off (default). Peak-clipped for safety.",
+    )
+    parser.add_argument(
+        "--brighten-fc", type=float, default=4000.0,
+        help="High-shelf corner frequency (Hz) for --brighten",
+    )
+    parser.add_argument(
         "--min_length",
         type=float,
         default=0.0,
@@ -184,12 +196,30 @@ def serialise_numpy(key: str, tokens: np.ndarray) -> dict:
     return {"__key__": key, "npy": buffer.getvalue()}
 
 
-def process_init(rank_queue, tokenizer_path):
+def _highshelf(x, sr, gain_db, fc):
+    """High-shelf EQ (dB boost above fc) via scipy biquad; identity if gain=0."""
+    if not gain_db:
+        return x
+    from scipy.signal import sosfilt, iirfilter  # local: optional dep
+    import numpy as _np
+    # simple 1st-order high-shelf built from a high-pass blend
+    A = 10 ** (gain_db / 40.0)
+    from scipy.signal import butter, sosfiltfilt
+    sos = butter(2, fc / (sr / 2), btype="highpass", output="sos")
+    hp = sosfiltfilt(sos, x).astype(_np.float32)
+    y = x + (A * A - 1.0) * hp        # boost only the high band
+    return _np.clip(y, -1.0, 1.0).astype(_np.float32)
+
+
+def process_init(rank_queue, tokenizer_path, brighten=0.0, brighten_fc=4000.0):
     """
     Initialization function for each worker process.
     Assigns a specific GPU to the process and loads the tokenizer.
     """
     global worker_tokenizer, worker_feature_extractor
+    global worker_brighten, worker_brighten_fc
+    worker_brighten = brighten
+    worker_brighten_fc = brighten_fc
 
     # Configure worker process logging
     formatter = (
@@ -227,8 +257,12 @@ def process_single_sample(sample: dict[str, Any]) -> dict[str, Any]:
 
         with torch.inference_mode():
             key = sample["label"]["id"]
+            raw = audio_tensor.squeeze(0).numpy()
+            if globals().get("worker_brighten", 0.0):
+                raw = _highshelf(raw, HIGGS_INPUT_SAMPLE_RATE,
+                                 worker_brighten, worker_brighten_fc)
             inputs = worker_feature_extractor(
-                raw_audio=audio_tensor.squeeze(0).numpy(),
+                raw_audio=raw,
                 sampling_rate=HIGGS_INPUT_SAMPLE_RATE,
                 return_tensors="pt",
             ).to(worker_tokenizer.device)
@@ -543,7 +577,8 @@ def main() -> None:
         with ProcessPoolExecutor(
             max_workers=num_processes,
             initializer=process_init,
-            initargs=(rank_queue, args.tokenizer_path),
+            initargs=(rank_queue, args.tokenizer_path,
+                      args.brighten, args.brighten_fc),
         ) as executor:
             logging.info(f"Submitting tasks... ({num_processes} workers)")
             futures = set()
