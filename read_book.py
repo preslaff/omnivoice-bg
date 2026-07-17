@@ -66,6 +66,10 @@ def main():
     ap.add_argument("--model", default="exp/omnivoice_bg_ft6b/checkpoint-3000")
     ap.add_argument("--bgtts-dir", default="models/bgtts-38m")
     ap.add_argument("--accentor", default="exp/accentor_ft6b/last.pt")
+    ap.add_argument("--marking", default="dense", choices=["dense", "none"],
+                    help="none = plain text to the omnivoice engine (tests the "
+                         "over-marking hypothesis; the 4:1 train mix makes "
+                         "plain text in-distribution)")
     ap.add_argument("--overrides", default="config/bg/bg_stress_overrides.json")
     ap.add_argument("--out", default=None,
                     help="output dir (default reading/<book-stem>)")
@@ -85,12 +89,12 @@ def main():
 
     # --- text -> chunks (CPU); marked for omnivoice, PLAIN for bgtts ---
     paras = load_paragraphs(book)
-    if args.engine == "omnivoice":
+    if args.engine == "omnivoice" and args.marking == "dense":
         from accentor_model import AccentorAccenter
         acc = AccentorAccenter(args.accentor, args.overrides)
         mark = acc.accent_text
     else:
-        mark = lambda t: t          # BgTTS: implicit stress from plain text
+        mark = lambda t: t          # plain text (bgtts, or --marking none)
     chunks = []                     # (text_for_tts, paragraph_index)
     for pi, par in enumerate(paras):
         for piece in chunk_paragraph(par):
