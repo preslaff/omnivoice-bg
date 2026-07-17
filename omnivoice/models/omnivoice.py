@@ -646,8 +646,15 @@ class OmniVoice(PreTrainedModel):
             ref_wav = waveform
 
         ref_rms = float(np.sqrt(np.mean(ref_wav**2)))
-        if 0 < ref_rms < 0.1:
+        # Normalize the reference to RMS ~0.1 in BOTH directions (local fix,
+        # OmniVoice-BG): upstream only BOOSTED quiet refs; a loud/hot ref
+        # (RMS > 0.1, often clipping) passed through un-normalized, and
+        # in-context cloning then imitates the reference's saturation — the
+        # clone "scratches". Attenuate hot refs too; peak-clip is a final
+        # safety (scaling reduces but cannot undo already-destructive clipping).
+        if ref_rms > 0:
             ref_wav = ref_wav * 0.1 / ref_rms
+            ref_wav = np.clip(ref_wav, -1.0, 1.0)
 
         if preprocess_prompt:
             # Trim long reference audio (>20s) by splitting at the largest silence gap.
