@@ -76,9 +76,6 @@ def main():
     ap.add_argument("--sparse-keep", default="config/bg/sparse_keep.json")
     ap.add_argument("--no-verbalize", action="store_true",
                     help="skip number/date/currency expansion (bg_verbalize)")
-    ap.add_argument("--no-final-stress", action="store_true",
-                    help="sparse: do NOT keep final-stress polysyllable marks "
-                         "(the imperative-rescue rule; on by default)")
     ap.add_argument("--overrides", default="config/bg/bg_stress_overrides.json")
     ap.add_argument("--out", default=None,
                     help="output dir (default reading/<book-stem>)")
@@ -102,8 +99,7 @@ def main():
         from accentor_model import AccentorAccenter
         acc = AccentorAccenter(
             args.accentor, args.overrides,
-            sparse_keep=args.sparse_keep if args.marking == "sparse" else None,
-            sparse_final_stress=not args.no_final_stress)
+            sparse_keep=args.sparse_keep if args.marking == "sparse" else None)
         mark = acc.accent_text
     else:
         mark = lambda t: t          # plain text (bgtts, or --marking none)
