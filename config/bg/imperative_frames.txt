@@ -1,0 +1,34 @@
+# Sentence FRAMES for the teacher-distill pipeline (teacher_distill.py).
+# Each frame has one {imp} slot filled by a verb from imperative_verbs.txt.
+# verbs × frames = the combinatorial bank (tens of thousands of short lines).
+#
+# Design the frames to:
+#  - stay SHORT (the imperative near the start, clearly stressed);
+#  - vary the words AFTER the verb so the model learns the imperative stress,
+#    not one fixed carrier phrase (over-fitting a single frame teaches nothing);
+#  - sound like real ad / narration copy (in-domain for your use case).
+# Include the bare "{imp}" frame so the verb is also seen in isolation.
+# '#' lines and blanks are ignored. A frame with no {imp} is skipped.
+
+{imp}
+{imp} сега
+{imp} сега на промоция
+{imp} още днес
+{imp} днес и спести
+{imp} веднага
+{imp} без забавяне
+{imp} преди да е свършило
+{imp} и виж разликата
+{imp} и се увери сам
+{imp} този продукт сега
+{imp} своята оферта
+{imp} от нашия магазин
+{imp} на страхотна цена
+{imp} с голяма отстъпка
+{imp} докато има наличност
+{imp} и получи подарък
+{imp} за себе си и близките
+Не чакай повече, {imp} сега.
+Затова {imp} без колебание.
+Хайде, {imp} заедно с нас.
+Точно затова {imp} още сега.

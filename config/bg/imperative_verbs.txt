@@ -1,0 +1,67 @@
+# Imperative VERB lexicon for the teacher-distill pipeline (teacher_distill.py).
+# One imperative per line, WRITTEN WITH THE CORRECT STRESS MARK (combining
+# acute U+0301) — this mark is the ground truth we teach OmniVoice.
+#
+# This is the SUPERVISABLE CORE: you curate a few hundred verbs; the frames
+# file multiplies them into tens of thousands of sentences. Bulgarian has a
+# finite, reviewable set of common imperatives — that finiteness is what makes
+# "tens of thousands of clips under supervision" tractable.
+#
+# PRIORITISE the homograph-twins (an aorist/noun spelled identically) — those
+# are the ones OmniVoice locks wrong and even BgTTS sometimes misses, so they
+# need the most coverage AND the most spot-checking:
+#   купи́ (imp)  vs  ку́пи (aorist)        обади́ се vs оба́ди
+#   наслади́ vs  насла́ди (noun)           плати́ vs  пла́ти
+# Marker '# HOMOGRAPH' after a verb flags it for stratified spot-check later.
+# Lines starting with '#' and blanks are ignored. Expand freely.
+
+# --- ad / call-to-action imperatives (highest value: your copy is full of them)
+купи́          # HOMOGRAPH
+поръчай
+вземи́
+обади́         # HOMOGRAPH   (обади́ се)
+запиши́ се
+регистрирай се
+пробвай
+избери́
+разгледай
+открий
+спести́
+плати́         # HOMOGRAPH
+активирай
+изтегли́
+инсталирай
+натисни́
+кликни
+последвай
+сподели́
+абонирай се
+
+# --- motion / action imperatives
+вдигни́        # HOMOGRAPH   (вди́гни rare)
+свали́
+отвори́
+затвори́
+дръпни́
+бутни́
+хвани́
+пусни́
+спри
+тръгвай
+ела́
+влез
+излез
+качи́ се
+слез
+
+# --- experience / lifestyle (ad tone)
+наслади́ се    # HOMOGRAPH
+опитай
+усети́
+представи́ си
+довери́ се
+започни́       # HOMOGRAPH   (запо́чни rare)
+продължи́
+завърши́
+почини́ си
+забавлявай се
