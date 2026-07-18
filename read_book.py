@@ -103,9 +103,11 @@ def main():
         mark = acc.accent_text
     else:
         mark = lambda t: t          # plain text (bgtts, or --marking none)
-    if not args.no_verbalize and args.engine == "omnivoice":
+    if not args.no_verbalize:
         from bg_verbalize import normalize as _verb
-        paras = [_verb(p) for p in paras]   # numbers -> words BEFORE marking
+        paras = [_verb(p) for p in paras]   # numbers -> words; engine-agnostic
+        # (BgTTS drops long numbers just like OmniVoice — its own weak spot the
+        #  user hit; expand to words for both engines, before any marking)
     chunks = []                     # (text_for_tts, paragraph_index)
     for pi, par in enumerate(paras):
         for piece in chunk_paragraph(par):

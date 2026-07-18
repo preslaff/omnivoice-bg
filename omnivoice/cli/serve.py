@@ -153,15 +153,21 @@ def build_app(
             raise HTTPException(status_code=400, detail=f"unknown engine: {engine!r}")
 
         # --- BgTTS-38M engine: plain text (no accenting), fixed cloned voice. ---
+        # Still verbalize: BgTTS renders imperatives well but drops long numbers
+        # just like OmniVoice, so numbers/dates -> words applies to both engines.
+        # No accenting (BgTTS uses its own implicit stress).
         if engine == "bgtts":
             if bgtts_engine is None:
                 raise HTTPException(
                     status_code=400,
                     detail="bgtts engine not loaded (start server with --bgtts-dir)",
                 )
+            bg_text = req.text
+            if verbalizer is not None and req.verbalize is not False:
+                bg_text = verbalizer(bg_text)
             try:
                 with lock:
-                    audio = bgtts_engine.synth(req.text)
+                    audio = bgtts_engine.synth(bg_text)
             except torch.OutOfMemoryError as exc:
                 torch.cuda.empty_cache()
                 raise HTTPException(status_code=503, detail=f"GPU OOM: {exc}") from exc
