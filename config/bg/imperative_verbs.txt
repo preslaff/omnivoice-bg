@@ -1,67 +1,218 @@
 # Imperative VERB lexicon for the teacher-distill pipeline (teacher_distill.py).
-# One imperative per line, WRITTEN WITH THE CORRECT STRESS MARK (combining
-# acute U+0301) — this mark is the ground truth we teach OmniVoice.
+# One imperative per line, WITH THE CORRECT STRESS MARK (combining acute U+0301)
+# on the imperative — this mark is the GROUND TRUTH we teach OmniVoice, so it
+# must be right. You are the native gate; the machine only scales what you sign.
 #
-# This is the SUPERVISABLE CORE: you curate a few hundred verbs; the frames
-# file multiplies them into tens of thousands of sentences. Bulgarian has a
-# finite, reviewable set of common imperatives — that finiteness is what makes
-# "tens of thousands of clips under supervision" tractable.
-#
-# PRIORITISE the homograph-twins (an aorist/noun spelled identically) — those
-# are the ones OmniVoice locks wrong and even BgTTS sometimes misses, so they
-# need the most coverage AND the most spot-checking:
-#   купи́ (imp)  vs  ку́пи (aorist)        обади́ се vs оба́ди
-#   наслади́ vs  насла́ди (noun)           плати́ vs  пла́ти
-# Marker '# HOMOGRAPH' after a verb flags it for stratified spot-check later.
-# Lines starting with '#' and blanks are ignored. Expand freely.
+# REVIEW PROTOCOL (fast, pattern-level — not word-by-word):
+#   Each section states its stress rule. Validate the RULE, then scan the
+#   section for the flagged exceptions. Flags:
+#     # HOMOGRAPH  an aorist/noun twin spelled the same (купи́ vs ку́пи). These
+#                  are the words OmniVoice locks wrong — highest value, and the
+#                  `review` stage force-surfaces every one for your ear.
+#     # STRESS?    I am unsure of the stress placement — please confirm/fix.
+#     # ?          confirm the word is natural / in-domain (drop if not).
+#   Every verb carries exactly one acute on a vowel (mechanically audited);
+#   the # STRESS? flags are where that placement needs your linguistic call.
+#   Inline text after '#' and blank lines are ignored by the parser.
 
-# --- ad / call-to-action imperatives (highest value: your copy is full of them)
-купи́          # HOMOGRAPH
-поръчай
-вземи́
-обади́         # HOMOGRAPH   (обади́ се)
-запиши́ се
-регистрирай се
-пробвай
-избери́
-разгледай
-открий
+# =====================================================================
+# SECTION 1 — borrowed -и́рам verbs → -и́рай (STEM stress on the и of -ирай).
+# High-confidence, uniform pattern. Common in modern ad copy.
+# =====================================================================
+активи́рай
+регистри́рай
+инстали́рай
+абони́рай
+резерви́рай
+коменти́рай
+инвести́рай
+гаранти́рай
+комбини́рай
+персонализи́рай
+оптимизи́рай
+синхронизи́рай
+актуализи́рай
+конфигури́рай
+рестарти́рай
+скани́рай
+копи́рай
+принти́рай
+релакси́рай
+дигитализи́рай     # ?
+
+# =====================================================================
+# SECTION 2 — a-conjugation (-ам/-ям) → -ай/-яй, STEM stress (ending -ай
+# is unstressed). The bulk of "soft" ad imperatives.
+# =====================================================================
+опи́тай
+про́бвай
+изпро́бвай
+поръ́чай
+поръ́чвай
+пазару́вай
+разгле́дай
+прегле́дай
+гле́дай
+слу́шай
+послу́шай
+пи́тай
+попи́тай
+предста́вяй        # STRESS?
+погле́ждай
+опо́знай
+изпо́лзвай
+сле́двай
+после́двай
+запо́чвай
+продължа́вай       # STRESS?
+мечта́й
+вдъхновя́вай       # STRESS?
+гле́зи             # STRESS?
+ча́кай
+изча́кай
+тръ́гвай
+бя́гай
+ти́чай
+почи́вай
+
+# =====================================================================
+# SECTION 3 — vowel-stem → -й, STEM stress. (игра́я→игра́й etc.)
+# =====================================================================
+игра́й
+да́вай             # HOMOGRAPH?  (да́вай impf vs дай perfective)
+пе́й
+успокоя́вай        # STRESS?   (успокоя́вай се)
+
+# =====================================================================
+# SECTION 4 — e-/и-conjugation perfectives → -и́, ENDING stress.
+# The confident CTA bulk. If a verb here actually keeps STEM stress in your
+# ear, flag it — this is the group most likely to hide exceptions.
+# =====================================================================
+купи́              # HOMOGRAPH   (ку́пи aorist)
+вземи́             # HOMOGRAPH?  (взе́ми prior)
+кажи́
+разкажи́
+покажи́
+напиши́
+пиши́
+прочети́
+чети́              # HOMOGRAPH?  (че́ти rare)
+плати́             # HOMOGRAPH   (пла́ти noun/aorist)
 спести́
-плати́         # HOMOGRAPH
-активирай
-изтегли́
-инсталирай
-натисни́
-кликни
-последвай
-сподели́
-абонирай се
-
-# --- motion / action imperatives
-вдигни́        # HOMOGRAPH   (вди́гни rare)
-свали́
+реши́
+избери́
+събери́
+разбери́
+намери́            # STRESS?  (наме́ри? — perfective наме́ря)
+спечели́           # STRESS?  (спече́ли?)
+подкрепи́
+дари́
+посети́
+позвъни́
+звънни́
+свържи́            # (свържи́ се)
+изпрати́
+прати́
+върни́             # HOMOGRAPH?  (въ́рни)
 отвори́
 затвори́
+свали́
+вдигни́            # HOMOGRAPH
+качи́              # (качи́ се)
+сложи́
+махни́
+хвърли́
+скочи́
+обърни́
+завърти́
+погледни́
+докосни́
+пипни́
+наведи́            # (наведи́ се)
 дръпни́
 бутни́
 хвани́
 пусни́
-спри
-тръгвай
-ела́
-влез
-излез
-качи́ се
-слез
+донеси́
+занеси́
+седни́
+легни́
+стани́             # HOMOGRAPH?  (ста́ни)
+помогни́
+събуди́            # STRESS?  (съ́буди?)
+обади́             # HOMOGRAPH   (оба́ди)  (обади́ се)
+наслади́           # HOMOGRAPH   (насла́ди noun)  (наслади́ се)
+довери́            # (довери́ се)
+усети́             # STRESS?  (усе́ти? — perfective усе́тя)
+запази́            # HOMOGRAPH?  (запа́зи? — перф. запа́зя)
+добави́            # STRESS?  (доба́ви?)
+сравни́
+потърси́
+провери́           # STRESS?  (прове́ри?)
+увери́             # STRESS?  (увери́ се)
+подсигури́         # STRESS?
+осигури́           # STRESS?
+защити́
+обмисли́           # STRESS?  (обми́сли?)
+прецени́
+запомни́           # STRESS?  (запо́мни?)
+научи́             # HOMOGRAPH?  (нау́чи)
+изтегли́           # STRESS?  (изте́гли?)
+включи́
+изключи́
+охлади́            # STRESS?
 
-# --- experience / lifestyle (ad tone)
-наслади́ се    # HOMOGRAPH
-опитай
-усети́
-представи́ си
-довери́ се
-започни́       # HOMOGRAPH   (запо́чни rare)
-продължи́
-завърши́
-почини́ си
-забавлявай се
+# =====================================================================
+# SECTION 5 — и-conjugation with FIXED STEM stress → -и (unstressed ending).
+# The tricky mirror of S4. These are where a naive "-и is stressed" rule goes
+# wrong. PLEASE verify each — this section is the highest review priority.
+# =====================================================================
+по́мни             # STRESS?
+ми́сли             # STRESS?
+пра́ви             # HOMOGRAPH   (this exact word was 0/8 in the bon test)
+хо́ди              # HOMOGRAPH   (also 0/8)  # STRESS?
+но́си              # HOMOGRAPH?  # STRESS?
+во́ди              # STRESS?
+у́чи               # HOMOGRAPH?  # STRESS?
+па́зи              # STRESS?
+дви́жи             # STRESS?   (движи се)
+
+# =====================================================================
+# SECTION 6 — stems in -е → -е́й / -и → -и́й (ENDING stress -й after vowel).
+# =====================================================================
+откри́й
+изживе́й
+преживе́й
+успе́й
+запе́й             # STRESS?
+загре́й
+
+# =====================================================================
+# SECTION 7 — IRREGULARS (list each explicitly; no rule).
+# =====================================================================
+ела́
+да́й               # HOMOGRAPH?  (да́й vs да́вай)
+ви́ж
+вле́з
+изле́з
+я́ж
+бъди́
+сто́й              # STRESS?
+спри́
+сле́з
+върви́
+
+# =====================================================================
+# SECTION 8 — health / fitness / instructional (imperative-dense domain).
+# =====================================================================
+ди́шай
+вди́шай
+изди́шай
+отпусни́           # (отпусни́ се)
+напрегни́
+повдигни́
+изправи́           # STRESS?  (изпра́ви — изпра́вя)  (изправи́ се)
+разтегни́
+трениру́вай        # STRESS?  (трени́рай?)
+спорту́вай
+храни́             # STRESS?  (хра́ни се?)
