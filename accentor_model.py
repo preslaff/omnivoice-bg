@@ -180,7 +180,8 @@ class AccentorAccenter:
     """
 
     def __init__(self, ckpt_path, overrides_path=None, device="cpu",
-                 threshold=0.5, max_len=240, sparse_keep=None):
+                 threshold=0.5, max_len=240, sparse_keep=None,
+                 sparse_final_stress=True):
         ck = torch.load(ckpt_path, map_location=device)
         cfg = dict(ck["config"])
         cfg["kernel"] = tuple(cfg["kernel"])
@@ -200,6 +201,7 @@ class AccentorAccenter:
         # homographs + hard words) and on override-PINNED words; all other
         # marks are stripped, letting the fine-tuned prior carry the prosody.
         self.sparse_keep = None
+        self.sparse_final_stress = sparse_final_stress
         if sparse_keep and os.path.exists(sparse_keep):
             with open(sparse_keep, encoding="utf-8") as f:
                 self.sparse_keep = set(json.load(f)["words"])
@@ -227,6 +229,26 @@ class AccentorAccenter:
 
         return _OV_WORD_RE.sub(sub, marked)
 
+    @staticmethod
+    def _final_stress_multi(w):
+        """True if the acute is on the LAST vowel of a word with >=2 vowels —
+        final stress on a polysyllable, where the TTS prior most often errs
+        (imperatives вземи́/говори́). Monosyllables (То́й/два́) are excluded:
+        their stress is unambiguous, so a mark there only over-articulates."""
+        if ACUTE not in w:
+            return False
+        bare = w.replace(ACUTE, "").lower()
+        nv = sum(c in VOWELS for c in bare)
+        if nv < 2:
+            return False
+        seen = -1
+        for c in w:
+            if c == ACUTE:
+                return seen == nv - 1
+            if c.lower() in VOWELS:
+                seen += 1
+        return False
+
     def _apply_sparse(self, marked):
         keep = self.sparse_keep | {
             k for k, v in self.overrides.items() if ACUTE in v}
@@ -234,7 +256,13 @@ class AccentorAccenter:
         def sub(m):
             w = m.group(0)
             bare = w.replace(ACUTE, "")
-            return w if bare.lower() in keep else bare
+            # keep if: on the list / pinned, OR (final-stress rule) a
+            # polysyllable stressed on its last vowel — catches imperatives
+            # the Accentor gets right but the prior would miss (вземи́).
+            if bare.lower() in keep or (self.sparse_final_stress
+                                        and self._final_stress_multi(w)):
+                return w
+            return bare
 
         return _OV_WORD_RE.sub(sub, marked)
 
