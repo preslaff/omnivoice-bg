@@ -49,6 +49,9 @@ import subprocess
 
 ACUTE = "́"
 VOWELS = set("аъоуеиюя")
+UP_V = "АЪОУЕИЮЯ"
+UP2LOW = {u: l for u, l in zip(UP_V, "аъоуеиюя")}
+LOW2UP = {l: u for l, u in zip("аъоуеиюя", UP_V)}
 ROOT = pathlib.Path("exp/imperatives")
 
 
@@ -300,6 +303,77 @@ def _save_review(rows):
     print(f"saved review.jsonl  (human: {n_ok} ok, {n_no} wrong)")
 
 
+# ---------- stage: normalize (CAPITAL-vowel <-> combining acute) ----------
+# You can't type a combining acute, so mark stress by UPPERCASING the stressed
+# vowel (купИ, прАви) — the notation you already use. `normalize` converts your
+# CAPITAL marks into the acute form the pipeline reads; `--to caps` goes the
+# other way (turn my acutes into editable capitals for your review pass).
+def _verb_to_acute(verb):
+    """CAPITAL vowel wins: strip any existing acute, lowercase the capital,
+    put the acute after it. Returns (new_verb, error_or_None)."""
+    s = verb.replace(ACUTE, "")
+    caps = [i for i, ch in enumerate(s) if ch in UP_V]
+    if len(caps) > 1:
+        return verb, "multiple CAPITAL vowels (mark exactly one)"
+    if not caps:
+        return (verb, None) if ACUTE in verb else (verb, "no stress mark")
+    i = caps[0]
+    return s[:i] + UP2LOW[s[i]] + ACUTE + s[i + 1:], None
+
+
+def _verb_to_caps(verb):
+    """Acute -> CAPITAL on the preceding vowel (for an editable review file)."""
+    res = []
+    for ch in verb:
+        if ch == ACUTE:
+            if res and res[-1] in VOWELS:
+                res[-1] = LOW2UP[res[-1]]
+        else:
+            res.append(ch)
+    return "".join(res)
+
+
+def stage_normalize(args):
+    path = pathlib.Path(args.file)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    out, changed, problems, n_stress_q = [], 0, [], 0
+    for ln in lines:
+        if not ln.strip() or ln.lstrip().startswith("#"):
+            out.append(ln)                       # comment / blank / header
+            continue
+        if "# STRESS?" in ln:
+            n_stress_q += 1
+        cut = ln.find("#")
+        head = ln if cut < 0 else ln[:cut]
+        tail = "" if cut < 0 else ln[cut:]
+        verb = head.strip()
+        if args.to == "caps":
+            new = _verb_to_caps(verb)
+            err = None
+        else:
+            new, err = _verb_to_acute(verb)
+        if err:
+            problems.append((verb, err))
+        changed += (new != verb)
+        out.append(new + (f"  {tail}" if tail else ""))
+    if args.out:
+        pathlib.Path(args.out).write_text("\n".join(out) + "\n", encoding="utf-8")
+        dest = args.out
+    else:
+        path.with_suffix(path.suffix + ".bak").write_text(
+            "\n".join(lines) + "\n", encoding="utf-8")   # backup
+        path.write_text("\n".join(out) + "\n", encoding="utf-8")
+        dest = str(path) + " (backup: *.bak)"
+    print(f"{args.to}: rewrote {changed} verb line(s) -> {dest}")
+    if problems:
+        print(f"\n{len(problems)} line(s) need attention:")
+        for v, e in problems:
+            print(f"   {e:35s} {v!r}")
+    if args.to == "acute":
+        print(f"\n{n_stress_q} line(s) still flagged # STRESS? "
+              f"(remove the flag as you confirm each — it's your checklist).")
+
+
 # ---------- stage: build (verified -> marked training manifest) ----------
 def stage_build(args):
     rows = load_jsonl(ROOT / "review.jsonl") or load_jsonl(ROOT / "judged.jsonl")
@@ -368,6 +442,14 @@ def main():
     b = sub.add_parser("build"); b.set_defaults(fn=stage_build)
     b.add_argument("--oversample", type=int, default=5)
     b.add_argument("--out", default="data/bg/imperatives/train.jsonl")
+
+    n = sub.add_parser("normalize", help="CAPITAL-vowel <-> acute for review")
+    n.set_defaults(fn=stage_normalize)
+    n.add_argument("--file", default="config/bg/imperative_verbs.txt")
+    n.add_argument("--to", choices=["acute", "caps"], default="acute",
+                   help="acute = your CAPITAL marks -> pipeline form (in place, "
+                        "makes a .bak); caps = my acutes -> editable CAPITALS")
+    n.add_argument("--out", default=None, help="write here instead of in place")
 
     args = ap.parse_args()
     args.fn(args)
