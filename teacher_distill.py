@@ -528,7 +528,13 @@ def stage_build(args):
     #     which would MISMATCH the imperative mark and poison training. The judge
     #     reliably separates these -> keep only judge=pass.
     # --strict reverts to pass-only for every verb (conservative).
+    # --exclude-verbs drops verbs where BgTTS itself is a bad teacher (the judge
+    # was INVERTED on прави/ходи — every render stem-stress; A/B-confirmed). Those
+    # get human-recorded audio instead (data/bg/imperatives_human).
+    excluded = set((args.exclude_verbs or "").split()) if hasattr(args, "exclude_verbs") else set()
     def keep(r):
+        if r.get("verb") in excluded:
+            return False                       # BgTTS can't teach it -> human audio
         if r.get("human") == "no":
             return False                       # your ear vetoes
         if r.get("human") == "ok":
@@ -615,6 +621,9 @@ def main():
     b.add_argument("--strict", action="store_true",
                    help="keep judge=pass for EVERY verb (default trusts BgTTS on "
                         "non-homographs, where aligner fails are false)")
+    b.add_argument("--exclude-verbs", default="",
+                   help="space-separated verbs BgTTS can't teach (A/B-confirmed); "
+                        "dropped from the shard, replaced by human recordings")
 
     n = sub.add_parser("normalize", help="CAPITAL-vowel <-> acute for review")
     n.set_defaults(fn=stage_normalize)

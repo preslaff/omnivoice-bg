@@ -1,0 +1,48 @@
+{
+    "train": [
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg400/tokens/train/data_sparse.lst"],
+            "repeat": 4
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg400/tokens/train/data.lst"],
+            "repeat": 1
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg/tokens/train/data_sparse.lst"],
+            "repeat": 4
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg/tokens/train/data.lst"],
+            "repeat": 1
+        },
+        {
+            "language_id": "bg",
+            "_comment": "BgTTS teacher-distill imperatives, прави/ходи EXCLUDED (BgTTS renders them stem-stress; A/B-confirmed the judge was inverted there). 6648 clips, marked-only, repeat 8.",
+            "manifest_path": ["data/bg/imperatives/tokens/train/data.lst"],
+            "repeat": 8
+        },
+        {
+            "language_id": "bg",
+            "_comment": "HUMAN-recorded прави́/ходи́ ground truth (30 clips) — the words no synthetic teacher can produce. repeat 20 = ~600 exposures, обади-level, to overcome a strong stem-stress prior. Marked-only, sparse-style.",
+            "manifest_path": ["data/bg/imperatives_human/tokens/train/data.lst"],
+            "repeat": 20
+        }
+    ],
+    "dev": [
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg400/tokens/dev/data_sparse.lst"],
+            "repeat": 1
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg/tokens/dev/data_sparse.lst"],
+            "repeat": 1
+        }
+    ]
+}

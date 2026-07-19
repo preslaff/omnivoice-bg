@@ -1,0 +1,53 @@
+# RECORDING SCRIPT — прави́ / ходи́ (ending stress)
+#
+# The CAPITAL vowel marks where the stress goes: правИ = прави́, ходИ = ходи́.
+# Say each line naturally, ad/narration tone, with the stress on the CAPITAL.
+# This is the ground truth BgTTS and OmniVoice both can't produce — your voice
+# is what teaches it.
+#
+# HOW TO RECORD (easiest path):
+#   - One continuous WAV, mono, 24 kHz or higher, clean quiet room.
+#   - Read the numbered lines in order; leave ~1 second of silence between each
+#     (the pause lets us auto-split on silence and label by line number).
+#   - Consistent distance/level; natural delivery, not robotic. A clip or two
+#     that you fluff — just pause and redo that line, we'll pick the clean take.
+#   - Save as examples/recordings/pravi_hodi.wav  (any name; tell me the path).
+#   Alternatively: one file per line named 01.wav, 02.wav ... — also fine.
+#
+# After you record, I handle the rest: split -> build the marked manifest
+# (verb ending-stressed, rest plain, sparse-style) -> tokenize -> high-repeat
+# shard -> ft8. Don't mark anything yourself; just read and record.
+
+### прави́  (do / make — imperative, stress the final И)
+1.  ПравИ упражнения всеки ден.
+2.  ПравИ това с усмивка.
+3.  ПравИ първата крачка още днес.
+4.  Не се колебай, правИ го сега.
+5.  ПравИ добро и продължавай напред.
+6.  ПравИ избора си смело.
+7.  ПравИ пауза когато си уморен.
+8.  ПравИ планове за бъдещето.
+9.  ПравИ всичко с любов.
+10. Хайде, правИ каквото трябва.
+11. ПравИ снимки на всеки момент.
+12. ПравИ крачка след крачка.
+13. Затова правИ всичко навреме.
+14. ПравИ както ти подсказва сърцето.
+15. ПравИ го правилно от първия път.
+
+### ходи́  (walk / go — imperative, stress the final И)
+16. ХодИ на разходка всяка сутрин.
+17. ХодИ пеша когато можеш.
+18. ХодИ бавно и се наслаждавай.
+19. ХодИ редовно на фитнес.
+20. Не бързай, ходИ спокойно.
+21. ХодИ по-често сред природата.
+22. ХодИ с изправен гръб.
+23. ХодИ до магазина за хляб.
+24. Хайде, ходИ да се раздвижиш.
+25. ХодИ уверено по своя път.
+26. ХодИ на училище всеки ден.
+27. ХодИ след мечтите си.
+28. Затова ходИ по-леко.
+29. ХодИ на планина през уикенда.
+30. ХодИ и не се обръщай назад.
