@@ -152,27 +152,52 @@ def stage_gen(args):
 
     # one engine per reference voice (speaker embedding is fixed per engine)
     engines = [BgTTSEngine(args.bgtts_dir, r, device=dev) for r in refs]
-    gen_rows, done, skip = [], 0, 0
+    gen_rows, done, skip, failed = [], 0, 0, []
     for bi, row in enumerate(bank):
         for s in range(args.seeds):
             cid = f"{row['id']}_v{s}"
             wav = wav_dir / f"{cid}.wav"
             eng = engines[(bi + s) % len(engines)]     # cycle voices
             if not wav.exists():
-                torch.manual_seed(args.seed + bi * 97 + s)
-                if dev == "cuda":
-                    torch.cuda.manual_seed_all(args.seed + bi * 97 + s)
-                sf.write(str(wav), eng.synth(row["plain"]), 24000)
+                w = _synth_retry(eng, row["plain"], args.seed + bi * 97 + s, dev)
+                if w is None:                          # dud seeds all round -> skip
+                    failed.append(cid)
+                    continue                           # retried next run (no wav)
+                sf.write(str(wav), w, 24000)
                 done += 1
                 if done % 50 == 0:
-                    print(f"  rendered {done} (+{skip} existing)", flush=True)
+                    print(f"  rendered {done} (+{skip} existing, "
+                          f"{len(failed)} skipped)", flush=True)
             else:
                 skip += 1
             gen_rows.append({**row, "cid": cid, "wav": str(wav),
                              "ref": refs[(bi + s) % len(refs)]})
     dump_jsonl(gen_rows, ROOT / "gen.jsonl")
+    if failed:
+        (ROOT / "gen_failed.txt").write_text("\n".join(failed) + "\n")
+        print(f"  {len(failed)} clip(s) produced no audio after retries "
+              f"(logged to {ROOT/'gen_failed.txt'}; rerun to retry them)")
     print(f"rendered {done}, skipped {skip} -> {len(gen_rows)} clips "
           f"({ROOT/'gen.jsonl'})")
+
+
+def _synth_retry(eng, text, base_seed, dev, tries=5, min_sec=0.15):
+    """BgTTS samples stochastically and some seeds hit immediate EOS -> empty
+    audio ('produced no audio'). Retry with spaced seeds; return audio (>=
+    min_sec) or None so one dud seed never kills the run."""
+    import torch
+    for k in range(tries):
+        seed = base_seed + k * 1009
+        torch.manual_seed(seed)
+        if dev == "cuda":
+            torch.cuda.manual_seed_all(seed)
+        try:
+            w = eng.synth(text)
+        except RuntimeError:              # "BgTTS produced no audio"
+            continue
+        if w is not None and len(w) >= int(min_sec * 24000):
+            return w
+    return None
 
 
 def _ref_list(ref):
