@@ -520,14 +520,29 @@ def stage_build(args):
     if not rows:
         raise SystemExit("run gen/judge/review first")
 
+    # Class-dependent keep policy (native spot-check finding, 2026-07-20):
+    #   - NON-homograph verbs: BgTTS renders the imperative correctly; the
+    #     aligner's "fail" is length-dependent noise (false fails). Audio matches
+    #     the mark -> keep ALL (the judge only discards good data here).
+    #   - HOMOGRAPH verbs: BgTTS sometimes renders the genuine aorist (ку́пи),
+    #     which would MISMATCH the imperative mark and poison training. The judge
+    #     reliably separates these -> keep only judge=pass.
+    # --strict reverts to pass-only for every verb (conservative).
     def keep(r):
         if r.get("human") == "no":
             return False                       # your ear vetoes
         if r.get("human") == "ok":
             return True                        # your ear approves
-        return r.get("verdict") == "pass"      # else trust the judge
+        if args.strict or r.get("homograph"):
+            return r.get("verdict") == "pass"  # judge gate (homograph / strict)
+        return r.get("verdict") != "uncertain"  # non-homograph: keep pass+fail
 
     kept = [r for r in rows if keep(r)]
+    nh = sum(1 for r in kept if not r.get("homograph"))
+    policy = "strict (pass-only)" if args.strict else \
+        "trust-BgTTS on non-homographs, judge-gate homographs"
+    print(f"keep policy: {policy} "
+          f"-> {nh} non-homograph + {len(kept) - nh} homograph clips")
     manifest = [{
         "id": r["cid"],
         "audio_path": str(pathlib.Path(r["wav"]).resolve()),
@@ -589,6 +604,9 @@ def main():
     b = sub.add_parser("build"); b.set_defaults(fn=stage_build)
     b.add_argument("--oversample", type=int, default=5)
     b.add_argument("--out", default="data/bg/imperatives/train.jsonl")
+    b.add_argument("--strict", action="store_true",
+                   help="keep judge=pass for EVERY verb (default trusts BgTTS on "
+                        "non-homographs, where aligner fails are false)")
 
     n = sub.add_parser("normalize", help="CAPITAL-vowel <-> acute for review")
     n.set_defaults(fn=stage_normalize)
