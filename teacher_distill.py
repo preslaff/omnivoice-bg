@@ -215,6 +215,117 @@ def _ref_list(ref):
     return [ref]
 
 
+# ---------- Kaldi judge helpers (build inputs / read the aligner's choice) ----
+def _mark_at(plain, k):
+    """Put the acute after the k-th vowel (0-based) of a plain word."""
+    seen = -1
+    for i, ch in enumerate(plain):
+        if ch in VOWELS:
+            seen += 1
+            if seen == k:
+                return plain[:i + 1] + ACUTE + plain[i + 1:]
+    return None
+
+
+def _g2p_all_variants(plain):
+    """Every stress placement of `plain` -> phone strings (one per vowel), so
+    the aligner is free to pick which vowel the clip actually stressed. Uses
+    the repo G2P (build_lexicon_phones.g2p) — same phone set as the tri2b model."""
+    from build_lexicon_phones import g2p
+    nvow = sum(ch in VOWELS for ch in plain)
+    prons = []
+    for k in range(nvow):
+        m = _mark_at(plain, k)
+        ph = g2p(m) if m else None
+        if ph:
+            prons.append(" ".join(ph))
+    return list(dict.fromkeys(prons))     # dedup, keep order
+
+
+_PUNCT = str.maketrans("", "", ".,!?;:„“”\"'()—–-")
+
+
+def _norm_text(sentence):
+    return sentence.lower().translate(_PUNCT).split()
+
+
+def _build_judge_dict(rows, pilot_dict, out_dir):
+    """Small lexicon over exactly the bank words (all stress variants each) +
+    the pilot's phone lists. Self-contained: no 132 MB lexicon dependency."""
+    out_dir = pathlib.Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    words = set()
+    for r in rows:
+        words.update(_norm_text(r["plain"]))
+    with open(out_dir / "lexicon.txt", "w", encoding="utf-8") as f:
+        f.write("<unk> SPN\n")
+        for w in sorted(words):
+            for pron in _g2p_all_variants(w) or [""]:
+                if pron:
+                    f.write(f"{w} {pron}\n")
+    for name in ("silence_phones.txt", "nonsilence_phones.txt",
+                 "optional_silence.txt", "extra_questions.txt"):
+        (out_dir / name).write_text(
+            (pathlib.Path(pilot_dict) / name).read_text(encoding="utf-8"),
+            encoding="utf-8")
+    return len(words)
+
+
+def _build_judge_data(rows, out_dir):
+    """Kaldi data dir. wav.scp resamples 24k clips to the model's 16k via
+    ffmpeg (matching the pilot's pipe convention); each clip is its own
+    speaker (fine for align_si)."""
+    out_dir = pathlib.Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    kept = []
+    for r in rows:
+        toks = _norm_text(r["plain"])
+        if r["verb"] in toks:            # only clips whose verb token is present
+            kept.append(r)
+    kept.sort(key=lambda r: r["cid"])
+    with open(out_dir / "wav.scp", "w") as fw, \
+         open(out_dir / "text", "w", encoding="utf-8") as ft, \
+         open(out_dir / "utt2spk", "w") as fu:
+        for r in kept:
+            wav = str(pathlib.Path(r["wav"]).resolve())
+            fw.write(f"{r['cid']} ffmpeg -i {wav} -ar 16000 -ac 1 "
+                     f"-f wav - 2>/dev/null |\n")
+            ft.write(f"{r['cid']} {' '.join(_norm_text(r['plain']))}\n")
+            fu.write(f"{r['cid']} {r['cid']}\n")
+    # spk2utt == utt2spk (one utt per spk)
+    (out_dir / "spk2utt").write_text((out_dir / "utt2spk").read_text())
+    return kept
+
+
+def _read_syms(path):
+    return {int(i): s for s, i in (l.split() for l in open(path, encoding="utf-8"))}
+
+
+def _parse_prons(ali_dir, kept, marked_from_phones):
+    """Read prons.*.gz; for each clip pull the TARGET verb token's chosen phones
+    and turn them back into a marked word (which vowel the audio stressed)."""
+    import glob
+    import gzip
+    lang = pathlib.Path(ali_dir) / "lang"
+    words = _read_syms(lang / "words.txt")
+    phones = _read_syms(lang / "phones.txt")
+    by_cid = {r["cid"]: r for r in kept}
+    chosen = {}
+    for gz in sorted(glob.glob(str(pathlib.Path(ali_dir) / "prons.*.gz"))):
+        with gzip.open(gz, "rt") as f:
+            for line in f:
+                p = line.split()
+                if len(p) < 5:
+                    continue
+                utt, wid = p[0], int(p[3])
+                r = by_cid.get(utt)
+                if r is None or words.get(wid) != r["verb"]:
+                    continue
+                pron = [phones[int(x)].split("_")[0] for x in p[4:]]
+                chosen[utt] = marked_from_phones(r["verb"], pron)
+    return chosen
+
+
 # ---------- stage: judge (Kaldi stress-check, the auto-gate) ----------
 def stage_judge(args):
     rows = load_jsonl(ROOT / "gen.jsonl")
@@ -227,53 +338,48 @@ def stage_judge(args):
         print("judge=none: all clips marked 'unjudged' -> review gates them.")
         return
 
-    # judge=kaldi: force-align each clip, read which vowel got stress '1',
-    # compare to the target ordinal on the VERB. Reuses the harvest reader
-    # (harvest_stress_labels.marked_from_phones) — the label machinery run in
-    # reverse (verify, not label). See _kaldi_stress() for the align hook.
+    # judge=kaldi: batch force-align all clips (tri2b/align_si) with an
+    # all-variant lexicon, then read which stress the aligner picked per verb
+    # and compare to the ground-truth ordinal. Reuses harvest's marked_from_phones
+    # (the label machinery run in reverse: verify, not label).
     from harvest_stress_labels import marked_from_phones
+    kdir = ROOT / "kaldi"
+    pilot_dict = pathlib.Path(args.pilot) / "data" / "local" / "dict"
+    if not (pilot_dict / "nonsilence_phones.txt").exists():
+        raise SystemExit(f"pilot dict not found at {pilot_dict} — run "
+                         f"kaldi_pilot.sh first (--pilot points at exp/kaldi_pilot)")
+    nwords = _build_judge_dict(rows, pilot_dict, kdir / "dict")
+    kept = _build_judge_data(rows, kdir / "data")
+    print(f"judge: {len(kept)} clips, {nwords} words (all-variant lexicon) "
+          f"-> aligning with {args.model} ...")
+
+    ali = (kdir / "ali").resolve()
+    nj = max(1, min(args.nj, len(kept)))
+    env = {**os.environ, "DICT": str((kdir / "dict").resolve()),
+           "DATA": str((kdir / "data").resolve()), "OUT": str(ali),
+           "MODEL": str((pathlib.Path(args.pilot) / "exp" / args.model).resolve()),
+           "nj": str(nj)}
+    r = subprocess.run(["bash", "kaldi_judge.sh"], env=env)
+    if r.returncode != 0:
+        raise SystemExit(f"kaldi_judge.sh failed (exit {r.returncode}); clips "
+                         f"remain unjudged — run `review` to gate by ear instead.")
+
+    chosen = _parse_prons(ali, kept, marked_from_phones)
     npass = nfail = nunc = 0
-    for i, r in enumerate(rows):
-        target = stressed_vowel_ordinal(r["verb_marked"])
-        phones = _kaldi_stress(r["wav"], r["plain"], r["verb"], args.kaldi_dir)
-        if phones is None:
-            r["verdict"], r["aligned"] = "uncertain", None
+    for row in rows:
+        got_marked = chosen.get(row["cid"])
+        if got_marked is None:                       # not aligned / verb absent
+            row["verdict"], row["aligned"] = "uncertain", None
             nunc += 1
-        else:
-            aligned_marked = marked_from_phones(r["verb"], phones)
-            got = stressed_vowel_ordinal(aligned_marked) if aligned_marked else None
-            ok = got is not None and got == target
-            r["verdict"], r["aligned"] = ("pass" if ok else "fail"), aligned_marked
-            npass += ok
-            nfail += (not ok)
-        if (i + 1) % 200 == 0:
-            print(f"  judged {i+1}/{len(rows)}", flush=True)
+            continue
+        got = stressed_vowel_ordinal(got_marked)
+        ok = got is not None and got == stressed_vowel_ordinal(row["verb_marked"])
+        row["verdict"], row["aligned"] = ("pass" if ok else "fail"), got_marked
+        npass += ok
+        nfail += (not ok)
     dump_jsonl(rows, ROOT / "judged.jsonl")
     print(f"judge=kaldi: {npass} pass, {nfail} fail, {nunc} uncertain "
           f"-> {ROOT/'judged.jsonl'}  (spot-check pass-precision in `review`)")
-
-
-def _kaldi_stress(wav, text, word, kaldi_dir):
-    """INTEGRATION HOOK — force-align `wav` to `text` and return the phone list
-    for `word` (e.g. ['k','u','p','i1']). Wire this to your kaldi_pilot.sh
-    stage-3/4 aligner over a one-utterance dir; the '1'-suffixed vowel phone is
-    the stress, which marked_from_phones() turns back into a marked word.
-    Returns None if alignment fails (-> 'uncertain', sent to human review).
-
-    Left as a hook because it depends on your local Kaldi layout; until wired,
-    run the pipeline with --judge none and let your ear (review) be the gate."""
-    if not kaldi_dir:
-        return None
-    helper = pathlib.Path(kaldi_dir) / "align_one.sh"   # you provide this
-    if not helper.exists():
-        return None
-    try:
-        out = subprocess.run(
-            ["bash", str(helper), wav, text, word],
-            capture_output=True, text=True, timeout=60, check=True).stdout
-        return out.split()          # space-separated phones for `word`
-    except Exception:               # noqa: BLE001  (align fail -> uncertain)
-        return None
 
 
 # ---------- stage: review (human spot-check, effort ∝ verbs) ----------
@@ -464,7 +570,14 @@ def main():
 
     j = sub.add_parser("judge"); j.set_defaults(fn=stage_judge)
     j.add_argument("--judge", choices=["none", "kaldi"], default="none")
-    j.add_argument("--kaldi-dir", default="", help="dir with align_one.sh hook")
+    j.add_argument("--pilot", default="exp/kaldi_pilot",
+                   help="the kaldi_pilot.sh work dir (steps/, data/local/dict, "
+                        "trained models)")
+    j.add_argument("--model", default="tri2b",
+                   help="GMM under <pilot>/exp/ to align with (tri2b = LDA+MLLT, "
+                        "align_si — the robust choice for short single clips)")
+    j.add_argument("--nj", type=int, default=8, help="parallel align jobs "
+                   "(auto-capped to #clips)")
 
     r = sub.add_parser("review"); r.set_defaults(fn=stage_review)
     r.add_argument("--per-verb", type=int, default=3, help="ear-checks per verb")
