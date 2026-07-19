@@ -1,100 +1,118 @@
-# Accentor-Refresh Cycle — full-parliament stress harvest → Accentor fine-tune
+# Accentor-Refresh Cycle — full-parliament harvest + imperative text → fine-tune
 
-**Axis:** this improves **mark correctness** (does the front-end choose въ́лна vs
-вълна́ for *this* sentence), **not acoustic rendering** (that's the TTS
-fine-tune / the imperative work). It's the single biggest remaining lever on
-homograph disambiguation — the errors the rechko dict structurally can't fix
-and BgTTS/OmniVoice can't either, because they're a *labelling* problem, not a
-*saying* problem.
+**Axis:** improves **mark correctness** (does the front-end choose въ́лна vs
+вълна́, ку́пи vs купи́ for *this* sentence) — **not** acoustic rendering (that's
+the TTS fine-tune / the imperative ft8 work). This is the biggest remaining
+lever on homograph disambiguation.
 
-**Why parliament:** hundreds of hours of **real human speech** in a *different
-register* from the audiobook corpus. The Kaldi aligner reads which stress
-variant the audio actually chose per ambiguous word (`harvest_stress_labels.py`)
-— contextual ground truth the model is otherwise starved of. 73 GB is
-downloaded (`data/bg_parliament`); the pilot harvested only a subset
-(`stress_labels_parliament{,2}.jsonl`).
+**Two complementary sources feed it:**
+1. **Full-parliament stress harvest** — hundreds of hours of real human speech
+   in a different register; the aligner reads which stress variant the audio
+   chose per ambiguous word. Fixes context-dependent homographs
+   (въ́лна/вълна́, гово́ри/говори́…).
+2. **Curated imperative marked-text (NEW)** — the same sentences we built for
+   ft8 (BgTTS set + human recordings), used **text-only**. Real speech *starves
+   the imperative reading* (`build_accentor_finetune.py` already flags this:
+   "говори́!/гово́ри … parliament/narration starves the imperative reading"), so
+   the harvest alone can't teach it. Our curated marks fill that exact gap.
 
-**Gating:** run this *after* ft8 is validated and promoted. It's an independent
-cycle — do not fold parliament audio into the TTS (wrong register, would pull
-the cloned voice toward podium prosody).
+**The payoff — closing the loop:** the Accentor's imperative failure (marks
+ку́пи, not купи́) is *why* we needed pins and the ft8 acoustic detour. Teach the
+Accentor to *mark* imperatives (this cycle) **and** ft8 to *render* marks (done)
+→ correct imperatives **end-to-end, no pins**. The imperative set does double
+duty: audio→ft8, text→Accentor.
 
-**Prerequisites (already satisfied):** `kaldi_pilot.sh` through stage 3
-(`exp/kaldi_pilot/exp/{tri2b,tri3b}` exist); `KALDI_ROOT=~/kaldi`.
+**Gating:** run after ft8 is validated/promoted. Independent cycle; parliament
+audio stays OUT of the TTS (register mismatch would dull the cloned voice).
 
 ---
 
-## Stage 1 — Scale the segmentation + harvest to the full corpus
+## Stage 1 — Incremental parliament harvest (the label factory)
 
-The pilot ran `kaldi_parliament_pilot.sh` on a subset. Now run it over **all**
-downloaded sessions. It self-stages (segment → fMLLR-align → harvest):
+Use the existing incremental harvester, **not** a pilot re-run. Milestone A's
+models are a *fixed* label factory (finding F2: alignment saturates at a few
+hundred h — the 63 h GMM aligned 400 h cleanly), so new sessions just pass
+through `tri2b_comb → tri4b → tdnn_a`:
 
 ```bash
-KALDI_ROOT=~/kaldi bash kaldi_parliament_pilot.sh      # stages 0-3, all sessions
+KALDI_ROOT=~/kaldi bash harvest_new_sessions.sh          # auto-diffs new sessions
+# -> data/kaldi/stress_labels_incr_<date>.jsonl  (DISJOINT from prior sets)
 ```
 
-- **stage 0-1:** `segment_long_utterances.sh` (biased-LM decode, seed=tri2b)
-  turns 2 h session recordings into utterances → `data/parl_seg`. Watch the
-  **segmentation yield** it prints (retained h / total) — the pilot's viability
-  bar was ≥~50%; below that, transcripts and audio are drifting.
-- **stage 2:** fMLLR-align the segments with tri3b → `exp/tri3b_parl_ali`.
-- **stage 3:** `get_prons.sh` → then `harvest_stress_labels.py` reads the
-  chosen stress variant per ambiguous token:
-  ```bash
-  ./venv/bin/python harvest_stress_labels.py \
-      --pilot exp/kaldi_pilot --ali exp/tri3b_parl_ali --data data/parl_seg \
-      --out data/kaldi/stress_labels_parliament_full.jsonl
-  ```
-
-**Gotcha (recorded):** the full-vocab `L.fst` × high `nj` OOM'd a 60 GB box
-before — the parliament lang uses a **vocab-limited combined dict** (stage 0).
-Keep `seg_nj` modest (8), and if OOM: `journalctl` for the oom-killer first,
-don't assume a crash.
-
-**Watch the harvest's mismatch warning:** if phone-map mismatch >10%, the
-`prons.*.gz` were written against a different `words.txt`/`phones.txt` than the
-lang — re-run `get_prons.sh` against the *current* lang before trusting labels.
+- It diffs the crawl manifest vs already-harvested session ids and processes
+  only the new ones (73 GB downloaded; prior harvest = `stress_labels_parliament{,2}`).
+- **Gotchas (recorded):** full-vocab `L.fst` × high `nj` OOM'd a 60 GB box —
+  keep `seg_nj=8`, check `journalctl` for the oom-killer before blaming a crash.
+  If the harvest's phone-map mismatch warning >10%, re-run `get_prons` against
+  the current lang first.
+- Watch the **segmentation yield** (retained h / total); low yield = transcript↔
+  audio drift in those sessions.
 
 ---
 
-## Stage 2 — Vet the harvested labels (quality gate)
+## Stage 2 — Build the imperative label set (NEW, text-only)
 
-Forced alignment is noisy; not every chosen variant is right. The A/B lesson
-from the imperative cycle applies: **the aligner seeds, the ear gates.**
+Convert the curated imperative sentences into the harvest label format (one row
+per imperative verb token: `{word, marked, sentence}`). Use **all** verbs
+including прави/ходи — for the Accentor we use only the *marks* (hand-vetted,
+correct); the polluted *audio* is irrelevant here.
 
 ```bash
-./venv/bin/python vet_stress_labels.py \
-    --labels data/kaldi/stress_labels_parliament_full.jsonl ...   # sample by word
-# spot-listen at (audio_path, t0) for the high-value homographs; the harvest
-# already emits t0/dur per token for exactly this.
+# from the ft8 bank (verb, verb_marked, plain sentence) + the human record set
+./venv/bin/python - <<'PY'
+import json, re, pathlib
+rows=[]
+# synthetic set: every verb x frame (marks are curated ground truth)
+for r in map(json.loads, open("exp/imperatives/bank.jsonl")):
+    rows.append({"word": r["verb"], "marked": r["verb_marked"],
+                 "sentence": r["plain"], "source": "imperative_synth"})
+# human record sentences (пpави/ходи, the resistant class)
+for r in map(json.loads, open("data/bg/imperatives_human/train.jsonl")):
+    marked=r["text"]; plain=marked.replace("́","")
+    # verb = first token; its marked form carries the acute
+    w=plain.split()[0].lower(); wm=marked.split()[0].lower()
+    rows.append({"word": w, "marked": wm, "sentence": plain.lower(),
+                 "source": "imperative_human"})
+pathlib.Path("data/kaldi/stress_labels_imperatives.jsonl").write_text(
+    "\n".join(json.dumps(x, ensure_ascii=False) for x in rows)+"\n")
+print(len(rows), "imperative label rows")
+PY
 ```
 
-- Prioritise **words with BOTH variants observed** (the harvest prints the top
-  by evidence) — those are the genuine contextual homographs, the whole point.
-- Discard word types where the split looks like alignment noise (e.g. one
-  variant <5% with no plausible context).
-- Native spot-check a stratified sample per word type; the ear-verified set is
-  what feeds training.
+**Balance is automatic:** `build_accentor_finetune.py` mixes chitanka + the
+parliament harvest, which carry the *aorist/declarative* readings of the same
+words (ку́пи, гово́ри). So the Accentor sees купи́ (imperative, our labels) AND
+ку́пи (aorist, corpus) → learns the **contextual distinction**, not a blanket
+"купи→купи́" (which would break the aorist — the over-correction we must avoid).
+
+*Refinement if it over-fits the templates:* the synthetic frames are limited
+(22); if eval shows the Accentor keying on the verb rather than imperative
+context, generate more varied imperative frames (text-only — cheap, no audio).
 
 ---
 
-## Stage 3 — Fold into the Accentor training set + fine-tune
-
-Merge the vetted parliament labels with the existing label sources
-(`stress_labels_{milestone_a,ab400,parliament,parliament2}.jsonl`, text rows,
-and the `adapt_teacher_rows.py` BgGPT rows) into the marked-sentence format
-`train_accentor.py` consumes. Then **fine-tune from the current production
-Accentor** (don't retrain from scratch — preserve what ft6b learned):
+## Stage 3 — Combine + fine-tune the Accentor
 
 ```bash
+./venv/bin/python build_accentor_finetune.py \
+    --labels data/kaldi/stress_labels_milestone_a.jsonl \
+    --labels data/kaldi/stress_labels_parliament2.jsonl \
+    --labels data/kaldi/stress_labels_incr_<date>.jsonl \
+    --labels data/kaldi/stress_labels_imperatives.jsonl \
+    --mix-chitanka data/chitanka/marked.jsonl --mix-ratio 5 \
+    --out data/accentor_finetune_ft7.jsonl
+
 ./venv/bin/python train_accentor.py \
-    --data data/chitanka/marked_plus_parliament_full.jsonl \
+    --data data/accentor_finetune_ft7.jsonl \
     --init exp/accentor_ft6b/best.pt \
     --out exp/accentor_ft7 --steps 40000
 ```
 
-- **Oversample the homograph tokens** (they're rare vs plain words) — same
-  minority-oversampling that helped calibration before.
-- Keep the plain-word majority so the model doesn't forget non-homograph G2P.
+- Fine-tune **from ft6b** (`--init`) — preserve what it learned, don't retrain
+  from scratch.
+- Oversample the rare homograph + imperative tokens (the harvest label rows are
+  a tiny fraction of the chitanka majority) — same minority-oversampling that
+  helped calibration before.
 
 ---
 
@@ -102,47 +120,46 @@ Accentor** (don't retrain from scratch — preserve what ft6b learned):
 
 ```bash
 ./venv/bin/python eval_accentor.py     --ckpt exp/accentor_ft7/best.pt   # in-domain
-./venv/bin/python eval_accentor_ood.py --ckpt exp/accentor_ft7/best.pt   # OOD (the real test)
-# + the homograph battery (config/bg/homograph_battery*.json)
+./venv/bin/python eval_accentor_ood.py --ckpt exp/accentor_ft7/best.pt   # OOD (real test)
+# + homograph battery (config/bg/homograph_battery*.json)
+# + a NEW imperative battery: does it now mark купи́/обади́/прави́/ходи́ in
+#   imperative context AND ку́пи/оба́ди in aorist context?
 ```
 
-**Success = the homograph battery and OOD accuracy improve** over ft6b, with no
-regression on plain-word stress. The battery is the headline number: the pilot
-showed the lexicon feeds the wrong mark in 6/8 homograph cases; the target is to
-close those with contextual labels. Parliament's *domain diversity* is the
-lever — it should help most on homographs whose disambiguating context the
-audiobook corpus never contained (political/formal vocabulary).
+**Success =**
+- homograph battery + OOD improve over ft6b (parliament payoff), AND
+- **imperatives now marked correctly in context, aorist intact** (the loop-close),
+- with no regression on plain-word stress.
+
+The imperative battery is the headline for *this* project: if it passes, the
+served pipeline produces купи́/прави́/ходи́ from the Accentor alone — **the pins
+in `bg_stress_overrides.json` become unnecessary** for these words.
 
 ---
 
 ## Stage 5 — Promote
 
-If the battery + OOD improve and plain-word stress holds:
-
 ```bash
-# serve_bg.sh / serve.py --accentor
 ACCENTOR=exp/accentor_ft7/best.pt bash serve_bg.sh
 ```
 
-Update `read_book.py --accentor` default and the served checkpoint together so
-offline dogfood and the LAN server stay in lockstep.
+Update `read_book.py --accentor` and the served checkpoint together (offline
+dogfood ↔ LAN server in lockstep). Then thin `bg_stress_overrides.json` — drop
+the imperative pins the Accentor now handles natively; keep only proper-name
+pins (Чопари́нов etc.) the model can't infer.
 
 ---
 
-## Expected impact & honest bounds
+## Honest bounds & sequencing
 
-- **Where it helps:** homograph mark-correctness on varied text — measurably, on
-  the battery/OOD. This is the axis parliament uniquely feeds.
-- **Where it does NOT help:** imperative rendering, ч/щ brightness, naturalness
-  (all acoustic — the TTS fine-tune owns those). Don't expect ft8-style wins
-  here; expect fewer wrong-stress homographs on general prose.
-- **Byproduct, not this cycle:** the same segmented+aligned parliament corpus is
-  the training set for the **ASR deliverable** (Zipformer/icefall) — bank it,
-  scope it separately.
+- **Helps:** homograph mark-correctness (parliament) + imperative marking
+  (curated text) → fewer wrong-stress words on general prose, and pins retired.
+- **Does NOT help:** ч/щ brightness, naturalness, voice quality (acoustic — the
+  TTS fine-tune owns those).
+- **Byproduct:** the segmented+aligned parliament corpus is also the ASR
+  (Zipformer/icefall) training set — scope separately.
 
-## Effort / sequencing
-
-1. ft8 validated & promoted  ← current cycle
-2. Stage 1 harvest (GPU-light, CPU-heavy Kaldi; hours-to-overnight on full corpus)
-3. Stage 2 vetting (native time — the gating human step)
-4. Stage 3 fine-tune (Accentor is small; ~1 h) → Stage 4 eval → Stage 5 promote
+Sequence: ft8 promoted → Stage 1 harvest (CPU-heavy Kaldi, hours-to-overnight)
+→ Stage 2 imperative labels (minutes) → Stage 3 fine-tune (~1 h) → Stage 4 eval
+→ Stage 5 promote + retire pins. Stage 2's native input is already done (the ft8
+verb lexicon you vetted).
