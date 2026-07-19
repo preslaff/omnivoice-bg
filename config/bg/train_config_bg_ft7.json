@@ -35,7 +35,7 @@
     "attn_implementation": "sdpa",
     "max_sample_tokens": 2000,
     "min_sample_tokens": 50,
-    "max_batch_size": 32,
+    "max_batch_size": 16,
 
     "logging_steps": 25,
     "eval_steps": 250,
