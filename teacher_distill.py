@@ -178,7 +178,15 @@ def stage_gen(args):
 def _ref_list(ref):
     p = pathlib.Path(ref)
     if p.is_dir():
-        return sorted(str(x) for x in p.glob("*.wav")) or [None]
+        wavs = sorted(str(x) for x in p.glob("*.wav"))
+        if not wavs:
+            raise SystemExit(f"--ref-audio dir {ref!r} contains no *.wav files")
+        return wavs
+    if not p.exists():
+        raise SystemExit(
+            f"--ref-audio {ref!r} not found. A trailing '/' means a directory: "
+            f"create it with a few clean reference wavs (voice variety = the "
+            f"model learns stress, not a voice), or pass a single wav.")
     return [ref]
 
 
