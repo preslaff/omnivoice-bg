@@ -1,0 +1,25 @@
+# CURATED "clean" imperative frames for the VOLUNTEER collector (collect.py).
+#
+# Unlike config/bg/imperative_frames.txt (the full combinatorial set used by
+# teacher_distill.py, where the odd nonsense combo — "Обади́ на страхотна цена" —
+# is harmless because BgTTS just reads it), volunteers are humans reading aloud.
+# A sentence that doesn't parse makes them stumble and mis-stress.
+#
+# So these frames are UNIVERSAL: time/manner completions that finish essentially
+# ANY imperative naturally, with NO object/price/product assumption. Every verb
+# from imperative_verbs.txt pairs cleanly with every frame here.
+#
+# Keep it that way when editing: only add a frame if it reads naturally for a
+# random imperative (test it against прави́, купи́, научи́, обмисли́). '#' and
+# blank lines are ignored; a frame with no {imp} slot is skipped.
+
+{imp}
+{imp} сега
+{imp} още днес
+{imp} веднага
+{imp} още сега
+{imp} без забавяне
+Не чакай повече, {imp} сега.
+Затова {imp} без колебание.
+Точно затова {imp} още сега.
+Хайде, {imp} заедно с нас.

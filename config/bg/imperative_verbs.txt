@@ -20,9 +20,9 @@
 # High-confidence, uniform pattern. Common in modern ad copy.
 # =====================================================================
 активи́рай
-регистри́рай
+регистри́рай се  # reflexive (sign up / register)
 инстали́рай
-абони́рай
+абони́рай се  # reflexive (subscribe)
 резерви́рай
 коменти́рай
 инвести́рай
@@ -140,16 +140,16 @@
 стани́
 помогни́
 събуди́
-обади́  # HOMOGRAPH   (оба́ди)  (обади́ се)
-наслади́  # HOMOGRAPH   (насла́ди noun)  (наслади́ се)
-довери́
+обади́ се  # HOMOGRAPH   (оба́ди aorist) — reflexive
+наслади́ се  # HOMOGRAPH   (насла́ди noun) — reflexive
+довери́ се  # reflexive (trust)
 усети́
 запази́  # HOMOGRAPH?  (запа́зи? — перф. запа́зя)
 добави́
 сравни́
 потърси́
 провери́
-увери́
+увери́  # refl? увери́ се = make sure (CTA usually reflexive) vs увери́ = assure someone
 подсигури́
 осигури́
 защити́
@@ -175,7 +175,7 @@
 води́
 учи́  # HOMOGRAPH?
 пази́  # HOMOGRAPH?
-движи́  # HOMOGRAPH?   (движи се)
+движи́ се  # HOMOGRAPH? — reflexive
 
 # =====================================================================
 # SECTION 6 — stems in -е → -е́й / -и → -и́й (ENDING stress -й after vowel).
@@ -208,10 +208,10 @@
 ди́шай
 вди́шай
 изди́шай
-отпусни́
+отпусни́  # refl? отпусни́ се = relax (fitness) vs отпусни́ = loosen something
 напрегни́
 повдигни́
-изправи́
+изправи́  # refl? изправи́ се = stand up (fitness) vs изправи́ = straighten something
 разтегни́
 трени́рай
 спорту́вай

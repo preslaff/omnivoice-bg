@@ -1,0 +1,55 @@
+{
+    "_comment": "ft9-multivoice: the volunteer imperative set (many speakers) is the point. The ft7/ft8 ceiling was that imperative stress is learned voice-SPECIFICALLY; dozens of volunteer voices reading прави́/ходи́/купи́ (data/bg/imperatives_volunteer, collected via omnivoice.cli.collect -> convert_volunteer.py) let the model abstract a voice-INDEPENDENT text->stress rule. Reuse train_config_bg_ft7.json (init omnivoice_bg_full/checkpoint-6500, 3000 steps, sdpa, max_batch_size 16). Launch: accelerate launch -m omnivoice.cli.train --train_config config/bg/train_config_bg_ft7.json --data_config config/bg/data_config_bg_ft9.json --output_dir exp/omnivoice_bg_ft9. Validate with sample_imperatives.py across MULTIPLE held-out ref voices (voice-invariance is the pass bar).",
+    "train": [
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg400/tokens/train/data_sparse.lst"],
+            "repeat": 4
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg400/tokens/train/data.lst"],
+            "repeat": 1
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg/tokens/train/data_sparse.lst"],
+            "repeat": 4
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg/tokens/train/data.lst"],
+            "repeat": 1
+        },
+        {
+            "language_id": "bg",
+            "_comment": "BgTTS teacher-distill imperatives, прави/ходи EXCLUDED (BgTTS renders them stem-stress). 6648 clips, marked-only, repeat 8. Keeps the non-resistant verbs (обади, купи, наслади…) well represented alongside the volunteer voices.",
+            "manifest_path": ["data/bg/imperatives/tokens/train/data.lst"],
+            "repeat": 8
+        },
+        {
+            "language_id": "bg",
+            "_comment": "HUMAN прави́/ходи́ (30 clips, one voice) — retained from ft8 as one timbre among the crowd. repeat 12 (lowered from ft8's 20: the volunteer set now carries прави/ходи across many voices, so this single voice should not dominate).",
+            "manifest_path": ["data/bg/imperatives_human/tokens/train/data.lst"],
+            "repeat": 12
+        },
+        {
+            "language_id": "bg",
+            "_comment": "VOLUNTEER imperatives — the ceiling-breaker: many speakers, marked ground truth, natural speech (no brighten). TUNE repeat to volume so volunteer exposures roughly match the synthetic set; convert_volunteer.py prints the clip count. Rough guide: <500 clips -> repeat 8; 500-1500 -> repeat 4; >1500 -> repeat 2. Start here once tokens exist; this line is inert until data/bg/imperatives_volunteer/tokens/train/data.lst is built.",
+            "manifest_path": ["data/bg/imperatives_volunteer/tokens/train/data.lst"],
+            "repeat": 6
+        }
+    ],
+    "dev": [
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg400/tokens/dev/data_sparse.lst"],
+            "repeat": 1
+        },
+        {
+            "language_id": "bg",
+            "manifest_path": ["data/bg/tokens/dev/data_sparse.lst"],
+            "repeat": 1
+        }
+    ]
+}

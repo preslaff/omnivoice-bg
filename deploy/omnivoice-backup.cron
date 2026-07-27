@@ -1,0 +1,22 @@
+# Nightly backup of the OmniVoice-BG volunteer recordings.
+#
+# Install:
+#   sudo cp deploy/backup_volunteer.sh /opt/omnivoice/deploy/
+#   sudo chmod +x /opt/omnivoice/deploy/backup_volunteer.sh
+#   sudo cp deploy/omnivoice-backup.cron /etc/cron.d/omnivoice-backup
+#   # (optional) offsite: append env lines to the cron entry, e.g.
+#   #   OMNIVOICE_BACKUP_REMOTE=user@host:/backups/omnivoice
+#   sudo systemctl restart cron        # or `service cron reload`
+#
+# Runs as root (so it can read www-data's files) at 03:30 every night.
+# Logs to /var/log/omnivoice-backup.log — check it after the first run:
+#   sudo run-parts --test  # n/a; instead just: sudo /opt/omnivoice/deploy/backup_volunteer.sh
+#
+# NOTE: /etc/cron.d entries REQUIRE the user field (here: root) and a newline
+# at end of file. Keep OMNIVOICE_BACKUP_DIR on a different disk/volume, or set
+# OMNIVOICE_BACKUP_REMOTE for a true offsite copy.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+30 3 * * * root /opt/omnivoice/deploy/backup_volunteer.sh >> /var/log/omnivoice-backup.log 2>&1

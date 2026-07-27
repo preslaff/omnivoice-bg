@@ -55,6 +55,7 @@ render/expect stem-stress for прави/ходи — A/B-confirmed).
 |---|---|---|
 | ft7 (`exp/omnivoice_bg_ft7`) | `data_config_bg_ft7.json` | BgTTS 6,667 clips (incl. polluted прави/ходи), repeat 8 |
 | ft8 (`exp/omnivoice_bg_ft8`) | `data_config_bg_ft8.json` | BgTTS 6,648 (прави/ходи excluded) repeat 8 + human 30 repeat 20 |
+| ft9 (`exp/omnivoice_bg_ft9`) *(planned)* | `data_config_bg_ft9.json` | BgTTS 6,648 repeat 8 + human 30 repeat 12 + **volunteer many-voice set** repeat ~6 (tune to volume) |
 
 ## Known limitation (why this dataset didn't fully solve imperatives)
 
@@ -68,6 +69,24 @@ arbitrary cloned voices; the text mark is a weak lever vs. the reference's
 timbre/prosody. Practical fallbacks: **BgTTS for imperative-heavy ad copy**
 (its own prior; serve.py engine routing), and/or serve-time best-of-N + stress
 judge for "sometimes-right" verbs. See the ft8-validation discussion.
+
+## Volunteer many-voice set — Track B (the ceiling-breaker)
+
+The root cause above is **too few speakers per imperative**. The fix is speaker
+*diversity*: collect the same marked imperatives from many real volunteers so the
+model can abstract a voice-independent text→stress rule (real timbres, unlike
+pitch-shifted pseudo-speakers). Tooling:
+
+| tool | role |
+|---|---|
+| `omnivoice/cli/collect.py` (`omnivoice-collect`) | FastAPI mic-record web app. Serves marked prompts from `imperative_verbs.txt`×`imperative_frames.txt`, **ending-stress class first**, per-speaker frame variety. Stores browser recordings + `submissions.jsonl` under `data/bg/imperatives_volunteer/`. Duration gate on submit; resumes per speaker across reloads. **No auth** — LAN/trusted group or front with a proxy. |
+| `convert_volunteer.py` | Decodes accepted clips → 24 kHz mono, full QC (RMS floor + clipping + duration), peak-normalises, writes marked `train.jsonl` (imperatives_human schema) + prints the GPU tokenize command (**no `--brighten`** — natural speech). |
+| `config/bg/data_config_bg_ft9.json` | ft9 mix = base bg + BgTTS synth + human + **volunteer set** (repeat tuned to volume). Reuses `train_config_bg_ft7.json`. |
+
+**Validate ft9 across MULTIPLE held-out reference voices** with
+`sample_imperatives.py` — voice-invariance (прави́/ходи́/купи́ ending-stress for
+*unseen* clones) is the pass bar, not one training voice. Full roadmap:
+`.claude/plans/woolly-swimming-popcorn.md`.
 
 ## Regenerate
 
