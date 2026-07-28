@@ -2,15 +2,34 @@
 #
 # The collector needs NO GPU and NO ML deps — only fastapi + uvicorn +
 # python-multipart, plus ffmpeg (optional, for the submit-time duration gate)
-# and the two prompt files (config/bg/imperative_verbs.txt + imperative_frames.txt).
+# and the two prompt files (config/bg/imperative_verbs.txt + imperative_frames_clean.txt).
+#
+# collect.py is fully self-contained (stdlib + fastapi + uvicorn only), so you do
+# NOT need the OmniVoice repo or an editable install on the VPS — just rsync the
+# handful of files below into /opt/omnivoice, preserving the tree:
+#
+#   /opt/omnivoice/
+#   ├── omnivoice/cli/collect.py
+#   ├── config/bg/imperative_verbs.txt
+#   ├── config/bg/imperative_frames_clean.txt
+#   └── deploy/logo.png                       # favicon.png optional (falls back to logo)
+#
+# IMPORTANT: launch it as a SCRIPT BY PATH (python omnivoice/cli/collect.py), NOT
+# as `python -m omnivoice.cli.collect`. The -m form imports the omnivoice package
+# __init__.py first, which pulls in torch/the model — absent on a no-ML VPS and it
+# would crash. Running the file by path never touches __init__.py. collect.py
+# resolves its config/logo defaults from parents[2] of its own path, i.e.
+# /opt/omnivoice, so the tree above makes the defaults Just Work.
 #
 # Install:
-#   # 1. put the repo on the VPS (need: collect.py + config/bg/*.txt + deploy/logo.png)
+#   # 1. rsync the files (from your dev box — see deploy/README.md for the exact
+#   #    rsync -R command), then on the VPS:
 #   sudo apt install ffmpeg python3-venv
-#   python3 -m venv /opt/omnivoice/venv
-#   /opt/omnivoice/venv/bin/pip install fastapi uvicorn python-multipart
-#   # 2. edit paths below to match, then:
-#   sudo cp deploy/omnivoice-collect.service /etc/systemd/system/
+#   sudo python3 -m venv /opt/omnivoice/venv
+#   sudo /opt/omnivoice/venv/bin/pip install fastapi uvicorn python-multipart
+#   sudo chown -R www-data:www-data /opt/omnivoice
+#   # 2. install & start:
+#   sudo cp /opt/omnivoice/deploy/omnivoice-collect.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now omnivoice-collect
 #   journalctl -u omnivoice-collect -f          # watch it start
@@ -25,8 +44,8 @@ After=network.target
 Type=simple
 User=www-data
 WorkingDirectory=/opt/omnivoice
-ExecStart=/opt/omnivoice/venv/bin/python -m omnivoice.cli.collect \
-    --host 127.0.0.1 --port 8003 \
+ExecStart=/opt/omnivoice/venv/bin/python omnivoice/cli/collect.py \
+    --host 127.0.0.1 --port 8004 \
     --out-dir /opt/omnivoice/data/bg/imperatives_volunteer
 Restart=on-failure
 RestartSec=3

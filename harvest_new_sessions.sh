@@ -100,16 +100,32 @@ fi
 # --- stage 2: segment + clean the new sessions (fixed seed/GMM) ---
 if [ $stage -le 2 ]; then
   echo "=== stage 2: segment (seed $SEED) + clean (fMLLR $GMM) ==="
-  steps/cleanup/segment_long_utterances.sh --nj $seg_nj --cmd "$train_cmd" \
-      "$SEED" data/lang data/parl_new data/parl_new_seg exp/segment_parl_new
-  utils/fix_data_dir.sh data/parl_new_seg
-  awk '{n++; d+=$4-$3} END {printf "new: %d segments, %.1f h retained\n", n, d/3600}' \
-      data/parl_new_seg/segments
-  steps/make_mfcc.sh --nj $nj --cmd "$train_cmd" data/parl_new_seg exp/make_mfcc/parl_new_seg mfcc
-  steps/compute_cmvn_stats.sh data/parl_new_seg exp/make_mfcc/parl_new_seg mfcc
-  utils/fix_data_dir.sh data/parl_new_seg
+  # The long-utterance segmentation is the ~7 h CPU decode. It is stage-gated
+  # internally, so re-running this stage would redo it from scratch. Skip it when
+  # parl_new_seg is already complete (lets you resume stage 2 after the align/clean
+  # fix below without repeating the segmentation).
+  if [ -f data/parl_new_seg/feats.scp ] && [ -s data/parl_new_seg/segments ]; then
+    echo "  [skip] data/parl_new_seg already built ($(wc -l <data/parl_new_seg/segments) segments) — reusing"
+  else
+    steps/cleanup/segment_long_utterances.sh --nj $seg_nj --cmd "$train_cmd" \
+        "$SEED" data/lang data/parl_new data/parl_new_seg exp/segment_parl_new
+    utils/fix_data_dir.sh data/parl_new_seg
+    awk '{n++; d+=$4-$3} END {printf "new: %d segments, %.1f h retained\n", n, d/3600}' \
+        data/parl_new_seg/segments
+    steps/make_mfcc.sh --nj $nj --cmd "$train_cmd" data/parl_new_seg exp/make_mfcc/parl_new_seg mfcc
+    steps/compute_cmvn_stats.sh data/parl_new_seg exp/make_mfcc/parl_new_seg mfcc
+    utils/fix_data_dir.sh data/parl_new_seg
+  fi
+  # fMLLR-align the NEW segmented data with the fixed tri4b GMM, producing trans.*
+  # keyed by the NEW speakers. This is REQUIRED: clean_and_segment_data.sh reuses
+  # $srcdir/trans.* as *this data's* fMLLR transforms (Kaldi assumes they match),
+  # so it must be fed an align dir built from parl_new_seg — NOT exp/tri4b, whose
+  # trans.* belong to the milestone-A training speakers (zero speaker overlap ->
+  # every utterance "had no features / no transform" -> 0 decoded, all jobs exit 1).
+  steps/align_fmllr.sh --nj $nj --cmd "$train_cmd" \
+      data/parl_new_seg data/lang "$GMM" exp/tri4b_ali_new_seg
   steps/cleanup/clean_and_segment_data.sh --nj $nj --cmd "$train_cmd" \
-      data/parl_new_seg data/lang "$GMM" exp/tri4b_cleanup_new data/parl_new_cleaned
+      data/parl_new_seg data/lang exp/tri4b_ali_new_seg exp/tri4b_cleanup_new data/parl_new_cleaned
   utils/fix_data_dir.sh data/parl_new_cleaned
 fi
 
