@@ -113,7 +113,17 @@ def main():
     rows, rejects = [], []
     per_verb, per_speaker = {}, {}
     for s in accepted:
+        # submissions.jsonl stores audio_path as an ABSOLUTE path on the collector
+        # host (e.g. /opt/omnivoice/...); after rsync to another machine that root
+        # differs, so re-root under --root by the 'raw/...' tail, falling back to
+        # rebuilding raw/<speaker>/<prompt>_t<take><ext> from the row's fields.
         src = pathlib.Path(s["audio_path"])
+        if not src.exists() and "raw" in src.parts:
+            src = root / pathlib.Path(*src.parts[src.parts.index("raw"):])
+        if not src.exists():
+            ext = pathlib.Path(s["audio_path"]).suffix or ".webm"
+            src = root / "raw" / s.get("speaker", "") / \
+                f"{s['prompt_id']}_t{s.get('take', 0)}{ext}"
         if not src.exists():
             rejects.append((s.get("prompt_id"), "raw file missing")); continue
         wav = _decode_24k_mono(src)

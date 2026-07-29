@@ -563,7 +563,19 @@ def build_app(bank, out_dir: pathlib.Path, min_sec: float, max_sec: float,
         # Multiple takes per (speaker, prompt) are allowed — the volunteer may
         # re-record the same sentence as many times as they like. Each take gets
         # its own file (…_t0, _t1, …) so nothing is overwritten.
-        ext = ".webm" if "webm" in mime else (".ogg" if "ogg" in mime else ".bin")
+        # Map the browser's MediaRecorder MIME to a real extension. iOS/Safari
+        # emits audio/mp4 (AAC) rather than webm/ogg, so without this those clips
+        # land as an opaque ".bin". ffmpeg decodes by content regardless, but a
+        # correct extension keeps raw/ self-describing and downstream-friendly.
+        _m = (mime or "").lower()
+        ext = next((e for tok, e in (
+            ("webm", ".webm"), ("ogg", ".ogg"), ("mp4", ".m4a"),
+            ("m4a", ".m4a"), ("aac", ".m4a"), ("mpeg", ".mp3"),
+            ("mp3", ".mp3"), ("wav", ".wav"),
+        ) if tok in _m), ".bin")
+        if ext == ".bin":
+            logger.warning("submit: unrecognized audio MIME %r from speaker %s "
+                           "(saved .bin; ffmpeg can still decode it)", mime, speaker)
         spk_dir = raw_dir / speaker
         spk_dir.mkdir(parents=True, exist_ok=True)
         with lock:
