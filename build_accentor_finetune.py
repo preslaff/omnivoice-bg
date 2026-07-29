@@ -66,8 +66,17 @@ TIER2_EXCLUDE = {"съюз", "вече", "още", "един", "една",
 # speech (parliament/narration) starves the imperative reading (2026-07-05:
 # говори́ 17 vs гово́ри 250, моли́ 0). Kept in tier-3 so the few real minority
 # tokens are not gated out; true fix is minority-reading DATA (see guide 6e).
+#   * ADDED 2026-07-29 (incr_20260728 vetting): цели (це́ли/цели́), води
+#     (во́ди/води́), работи (рабо́ти/ра́боти) — both readings vetted `ok` (5/5,
+#     5/5, 3+5/0) on the new harvest, genuine content-word homographs. The other
+#     confirmed-noise splits (вече/като/колеги/съюз/… all bad on the minority)
+#     need no entry: they are already in TIER2_EXCLUDE or fall to canonical via
+#     share<0.90, and the --vet-results per-token veto drops their sampled tokens.
+#     NOTE: между came back both-`ok` too, but stays in TIER2 — its между́ is
+#     phrasal prominence leaking to the next word, not lexical (see tier-2 note).
 TIER3_CONTEXTUAL = {"говори", "чета", "против", "вълна", "пара", "коса",
-                    "само", "моли", "носи", "прави", "купи", "учи", "ходи"}
+                    "само", "моли", "носи", "прави", "купи", "учи", "ходи",
+                    "цели", "води", "работи"}
 
 
 def load_canonical(path):
