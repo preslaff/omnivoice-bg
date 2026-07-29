@@ -146,16 +146,35 @@ def build_bank(verbs_path: pathlib.Path, frames_path: pathlib.Path):
     return bank
 
 
-def speaker_order(bank, speaker: str):
-    """Deterministic per-speaker prompt ordering: high-value class first, but
-    verb/frame choice varied between speakers (seeded by the speaker id) so the
-    same word is recorded in different carrier phrases across the crowd."""
+def speaker_order(bank, speaker: str, count_by_prompt=None, target: int = 1):
+    """Per-speaker prompt ordering.
+
+    Dominated by a per-(speaker, prompt) pseudo-random score, so different
+    volunteers traverse the bank in DIFFERENT orders — no more everyone starting
+    on the same sentences and nobody reaching the tail. High-value prompts are
+    gently pulled forward and already-covered prompts pushed back, but NEITHER
+    dominates the randomness, so the whole bank stays reachable.
+
+    (Previously the sort key was (-priority, hash): priority was absolute, so
+    every speaker drained the entire high-value pool first and the rest was never
+    reached; coverage was ignored, so covered prompts kept being served.)"""
+    count_by_prompt = count_by_prompt or {}
     seed = int(hashlib.sha256(speaker.encode()).hexdigest()[:8], 16)
-    def key(row):
-        # stable pseudo-random tie-break per (speaker, prompt)
+
+    def score(row):
         h = int(hashlib.sha256(f"{seed}:{row['id']}".encode()).hexdigest()[:8], 16)
-        return (-row["priority"], h)
-    return sorted(bank, key=key)
+        rnd = h / 0xFFFFFFFF                                   # uniform [0, 1)
+        cov = min(count_by_prompt.get(row["id"], 0) / max(target, 1), 1.0)
+        # lower score served first. Randomness LEADS (full [0,1) spread) so
+        # volunteers diverge and every prompt is reachable. High value only
+        # nudges forward (up to 0.09 off, priority 0..3) — deliberately gentle:
+        # there are ~900 high-value prompts, so a heavier nudge floods the head
+        # with them and the tail is never reached (the exact bug we're fixing).
+        # It still leads on average, so high value fills first, then coverage
+        # sinks a satisfied prompt hard (+0.60) and it drops out of rotation.
+        return rnd - 0.03 * row["priority"] + 0.60 * cov
+
+    return sorted(bank, key=score)
 
 
 # ----------------------------------------------------------------------------
@@ -518,8 +537,13 @@ def build_app(bank, out_dir: pathlib.Path, min_sec: float, max_sec: float,
             raise HTTPException(status_code=400, detail="speaker required")
         with lock:
             done = done_by_speaker.get(speaker, set())
-            order = speaker_order(bank, speaker)
-            nxt = next((r for r in order if r["id"] not in done), None)
+            order = speaker_order(bank, speaker, count_by_prompt, target_per_prompt)
+            # skip prompts this speaker already did/flagged AND prompts that have
+            # already reached the crowd target (so coverage spreads to the tail).
+            nxt = next((r for r in order
+                        if r["id"] not in done
+                        and count_by_prompt.get(r["id"], 0) < target_per_prompt),
+                       None)
         if nxt is None:
             return {"done": True, "completed": len(done)}
         return {

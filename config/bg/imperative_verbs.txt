@@ -176,6 +176,18 @@
 учи́  # HOMOGRAPH?
 пази́  # HOMOGRAPH?
 движи́ се  # HOMOGRAPH? — reflexive
+# --- added 2026-07-29: starved-reading expansion (Accentor ft7 battery gaps +
+#     more 3sg/imperative homographs for the volunteer drive). говори́/моли́ were
+#     MISSING entirely and are confirmed battery items; the rest are # STRESS?
+#     for your ear — they follow the Section-5 -и́ ending-stress rule but I'm
+#     adding them, so please confirm before they go live. ---
+говори́  # HOMOGRAPH (гово́ри 3sg) — battery gap, was absent
+моли́  # HOMOGRAPH (мо́ли 3sg) — battery gap, was absent
+цени́  # HOMOGRAPH? (це́ни 3sg) — "цени́ момента"  # STRESS?
+гаси́  # HOMOGRAPH? (га́си 3sg) — instructional "гаси́ лампата"  # STRESS?
+върти́  # HOMOGRAPH? (въ́рти 3sg) — fitness "върти́ педалите"  # STRESS?
+служи́  # HOMOGRAPH? (слу́жи 3sg)  # STRESS?
+дели́  # HOMOGRAPH? (де́ли 3sg)  # STRESS?
 
 # =====================================================================
 # SECTION 6 — stems in -е → -е́й / -и → -и́й (ENDING stress -й after vowel).
