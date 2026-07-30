@@ -163,3 +163,59 @@ Sequence: ft8 promoted → Stage 1 harvest (CPU-heavy Kaldi, hours-to-overnight)
 → Stage 2 imperative labels (minutes) → Stage 3 fine-tune (~1 h) → Stage 4 eval
 → Stage 5 promote + retire pins. Stage 2's native input is already done (the ft8
 verb lexicon you vetted).
+
+---
+
+## Progress log — ft7 refresh cycle (2026-07-30)
+
+Stages 1–4 executed. Summary and findings.
+
+**Stage 1 (harvest) — DONE.** 81 new sessions (~288 h effective) through the
+fixed Kaldi factory → `stress_labels_incr_20260728.jsonl`: **549,189 tokens,
+14,681 types, 2,673 both-variant types**, 38 phone-map mismatches (0.023 %),
+disjoint from milestone-A. Two ops lessons in `docs/HARVEST_CRASH_CAPTURE.md`:
+the 07-28 freeze was a platform hang on the auto-installed `7.0.0-28` kernel
+(NOT OOM — re-run clean on `6.17.0-40`); and incremental cleanup needs an
+`align_fmllr` pass first — tri4b's stored `trans.*` are training-speaker
+transforms with zero overlap on new sessions (all 24 decode jobs exited 1).
+
+**Native vetting.** 518 audio verdicts (`vetting_results.jsonl`);
+`build_vetting_shortlist.py` ranks both-variant tokens by label-noise impact.
+Confirmed цели/води/работи as true homographs (→ tier-3); the alignment-noise
+splits (колеги́, всички́, вече́…) are already handled by the veto / share<0.9 gate.
+
+**Stages 3–4 — the ft7 sub-cycle (init from ft6b throughout):**
+
+| run | battery v1 | OOD SER | change |
+|---|---|---|---|
+| ft6b (prior prod) | 15/25 | 0.005 % | baseline |
+| ft7 — corpus refresh + tier-3 цели/води/работи | 14/25 | 0.005 % | net-neutral (+па́ра −говори́/чета) |
+| ft7b — + starved set (brute, all 164 verbs) | 17/25 | 0.011 % | fixed купи/моли/чета-noun; **final-stress bias** (въ́лна regressed) |
+| ft7c — `--homograph-only` + mine_homographs + F3 curated носи/учи/ходи | **22/25** | **0.005 %** | imperfective imperatives flipped; въ́лна recovered; bias gone |
+
+**Generalization eval (NEW) — proves ft7c is not battery-overfit:**
+- `config/bg/homograph_battery_v2.json` — 25 sentences, 15 homographs, **6
+  registers**, disjoint from v1 + training: **ft7c 21/25 vs ft7b 16/25** (+5
+  reproduces on unseen contexts).
+- `fetch_eval_wild.py` → ~33 k words unseen encyclopedic (Wikipedia): automatic
+  SER **ft7c 0.089 % vs ft7b 0.119 %** — ft7c generalizes better on a new register.
+
+**ft7d (drafted, pending run).** The v2 residuals are *context-sensitivity*, not
+per-word failure (носи́/прави́ pass concrete-object contexts, fail abstract/ad;
+говори́ fails comparatives). ft7d adds those exact context shapes (abstract-object,
+comparative, ad) — diversity, not volume. **само́/въ́лна are accepted residuals**:
+context-dependent, they default to the common reading (са́мо/вълна́) which is right
+on the vast majority — NOT statically pinnable (a pin would break the majority).
+
+**Findings this cycle** (→ paper §7):
+1. **The Accentor is data-limited, not architecture-limited** — it fits to
+   0.026 % SER and learns every reading the moment adequate balanced data appears;
+   capacity/receptive-field are not the bottleneck.
+2. **Brute-force final-stress injection biases globally** — marking all 164 verbs'
+   imperatives (ft7b) tipped въ́лна→вълна́ and doubled OOD SER; `--homograph-only`
+   removed it.
+3. **Context beats volume at the imperfective-imperative wall** — носи́/учи́/ходи́
+   flipped at ~250 *diverse* contexts (curated + natural mined) + balanced 3sg,
+   where 176 templated frames alone had failed in every prior checkpoint.
+4. **Generalization must be measured on unseen contexts AND unseen register** —
+   battery v1 can't tell learning from memorization; v2 + wild-SER can.
