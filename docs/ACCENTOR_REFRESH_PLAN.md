@@ -236,8 +236,21 @@ passed ⇒ unpinnable. **Nothing to add to the overrides**: render errors are
 mark-already-correct (a pin is a no-op); mark errors are not statically pinnable.
 **The imperative ceiling is therefore 100 % acoustic** — the exact target of the
 volunteer many-voice drive → ft9. The Accentor front-end (marking) is **done**;
-the open lever is acoustic — voice diversity (ft9) or voice selection (some voices
-render imperatives, some don't), not front-end work.
+the open lever is acoustic, not front-end work.
+
+**Multi-voice reframe + PAUSE (2026-07-30).** Re-tested the failing imperatives
+across many reference voices: **almost all voices fail the SAME words**
+(прави́/носи́/ходи́/купи́/говори́), учи́ a rare exception. So it is NOT voice-specific
+— it's a **model-level word-prior bias** in the production e3_sparse TTS (the mark
+doesn't override the learned пра́ви/но́си 3sg prior, uniformly across voices; the
+reference voice sets timbre, not this stress prior). This is actually a *cleaner*
+target: one uniform word-prior, so teaching прави́ helps every voice at once —
+exactly what the many-voice **ft9** produces. Interim levers: **BgTTS-38M renders
+these correctly from plain text** (`engine:"bgtts"`) = stopgap for imperative/ad
+content today; `guidance_scale`↑ is a cheap per-request test. **The imperative
+RENDERING work is now PAUSED** — pivoted to the ASR byproduct (see
+[BG_ASR_PLAN.md](BG_ASR_PLAN.md)); ft9 remains the durable fix when the volunteer
+dataset matures.
 
 **Findings this cycle** (→ paper §7):
 1. **The Accentor is data-limited, not architecture-limited** — it fits to
