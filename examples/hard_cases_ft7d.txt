@@ -1,0 +1,31 @@
+# Hard-case set for ft7d end-to-end audio eval. Plain text — the SERVER applies
+# the ft7d Accentor + sparse_keep + overrides. The question is whether the TTS
+# RENDERS the stress the Accentor marks (the imperative-ceiling test). Lines
+# starting with # are category headers (skip them when generating).
+#
+# --- Imperatives we fixed — does the TTS render the ENDING stress? ---
+Прави каквото ти казвам и няма да съжаляваш.
+Носи багажа до колата, моля те.
+Ходи по-бързо, че ще закъснеем.
+Купи билети за концерта още днес.
+Говори по-високо, защото не те чувам.
+Учи всеки ден, ако искаш да изкараш изпита.
+# --- 3sg contrast — must NOT invert to the imperative (root stress) ---
+Той прави всичко възможно, за да помогне.
+Тя ходи на работа пеша всяка сутрин.
+Синът им учи медицина в София.
+# --- Homograph residuals (the see-saw class) ---
+Детето остана само вкъщи цяла вечер.
+Искам само една минута от времето ти.
+Пуловерът е изплетен от мека овча вълна.
+Огромна вълна заля скалите на брега.
+Хайдушката чета премина тайно през планината.
+Всяка вечер чета по една глава от книгата.
+# --- New homographs (tier-3 additions) ---
+Новата програма цели да намали безработицата сред младите.
+Проливните дъждове замърсиха питейните води на региона.
+Устройството работи безотказно дори при ниски температури.
+# --- Ad-CTA imperatives (the pin-cull context) ---
+Натиснете бутона и въведете паролата.
+Отворете таблото и добавете нов профил.
+Запазете промените, преди да затворите приложението.

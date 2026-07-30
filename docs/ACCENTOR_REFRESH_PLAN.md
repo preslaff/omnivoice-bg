@@ -191,21 +191,53 @@ splits (колеги́, всички́, вече́…) are already handled by th
 | ft6b (prior prod) | 15/25 | 0.005 % | baseline |
 | ft7 — corpus refresh + tier-3 цели/води/работи | 14/25 | 0.005 % | net-neutral (+па́ра −говори́/чета) |
 | ft7b — + starved set (brute, all 164 verbs) | 17/25 | 0.011 % | fixed купи/моли/чета-noun; **final-stress bias** (въ́лна regressed) |
-| ft7c — `--homograph-only` + mine_homographs + F3 curated носи/учи/ходи | **22/25** | **0.005 %** | imperfective imperatives flipped; въ́лна recovered; bias gone |
+| ft7c — `--homograph-only` + mine_homographs + F3 curated носи/учи/ходи | 22/25 | 0.005 % | imperfective imperatives flipped; въ́лна recovered; bias gone |
+| **ft7d — + context-diversity (abstract/comparative/ad imperatives)** | **22/25** | **0.005 %** | ALL imperatives flip on both batteries; residuals move to see-sawing lexicals |
 
-**Generalization eval (NEW) — proves ft7c is not battery-overfit:**
-- `config/bg/homograph_battery_v2.json` — 25 sentences, 15 homographs, **6
-  registers**, disjoint from v1 + training: **ft7c 21/25 vs ft7b 16/25** (+5
-  reproduces on unseen contexts).
-- `fetch_eval_wild.py` → ~33 k words unseen encyclopedic (Wikipedia): automatic
-  SER **ft7c 0.089 % vs ft7b 0.119 %** — ft7c generalizes better on a new register.
+**Generalization eval (NEW) — five-way on unseen data:**
 
-**ft7d (drafted, pending run).** The v2 residuals are *context-sensitivity*, not
-per-word failure (носи́/прави́ pass concrete-object contexts, fail abstract/ad;
-говори́ fails comparatives). ft7d adds those exact context shapes (abstract-object,
-comparative, ad) — diversity, not volume. **само́/въ́лна are accepted residuals**:
-context-dependent, they default to the common reading (са́мо/вълна́) which is right
-on the vast majority — NOT statically pinnable (a pin would break the majority).
+| run | battery v1 | battery v2 (unseen ctx) | wild SER (unseen reg) |
+|---|---|---|---|
+| ft7b | 17/25 | 16/25 | 0.119 % |
+| ft7c | 22/25 | 21/25 | 0.089 % |
+| **ft7d** | **22/25** | **22/25** | **0.059 %** |
+
+`config/bg/homograph_battery_v2.json` (25 sentences, 15 homographs, 6 registers,
+disjoint from v1 + training) and `fetch_eval_wild.py` (~33 k words unseen
+Wikipedia). ft7d is best on both unseen axes; the +5 gain reproduces on unseen
+contexts ⇒ learned rule, not overfit.
+
+**Conclusion — SHIPPED ft7d (2026-07-30).** Five checkpoints establish the data
+ceiling: the model fits to 0.023 % SER and learns each reading when given adequate
+balanced+diverse data (⇒ **data-limited, not architecture-limited**), but the
+remaining lexical homographs **само/вълна/чета́ see-saw ±1–2 with training
+variance** and pushing imperatives harder starts inverting 3sg (у́чи). ft7d is the
+balance point: **all homograph imperatives resolve contextually** (говори́/носи́/
+прави́/купи́/учи́/ходи́ pass v1 AND v2), best generalization. Residuals само/вълна/
+чета́ are **accepted, unpinnable** (context-dependent → default to the common
+reading, right ~99 % of the time; a static pin would break the majority).
+
+**Promotion + pin cull (Stage 5):** `serve_bg.sh` ACCENTOR → `exp/accentor_ft7d/
+best.pt`. Data-driven cull of `bg_stress_overrides.json` (79 → ~31): **49 pins
+redundant** (ft7d reproduces the mark standalone — CTA -ете imperatives, lexicon
+words, ако/или suppression), **20 kept** (model still wrong: стартирайте, вашия,
+можете…), **9 homograph pins verify-in-context** (perfective CTA imperatives
+добави́/запази́/вдигни́ default to aorist standalone — keep unless context-tested).
+Keep чопари́нов (proper name — the one class the model can't infer). Applied
+2026-07-30: `bg_stress_overrides.json` **79 → 31 entries**.
+
+**End-to-end audio eval (2026-07-30, reklama voice) — closes the marking track.**
+21 hard cases through the served TTS. Of the 10 audio failures, **8 were
+RENDERING, not marking**: ft7d marked прави́/носи́/ходи́/купи́/говори́/цели́/води́/
+добаве́те all correctly, but the fixed voice did not *render* the ending stress
+(учи́ *did* render — voice- and word-specific). Only 2 were mark errors
+(само́/чета́), both context-dependent see-saw homographs whose majority reading
+passed ⇒ unpinnable. **Nothing to add to the overrides**: render errors are
+mark-already-correct (a pin is a no-op); mark errors are not statically pinnable.
+**The imperative ceiling is therefore 100 % acoustic** — the exact target of the
+volunteer many-voice drive → ft9. The Accentor front-end (marking) is **done**;
+the open lever is acoustic — voice diversity (ft9) or voice selection (some voices
+render imperatives, some don't), not front-end work.
 
 **Findings this cycle** (→ paper §7):
 1. **The Accentor is data-limited, not architecture-limited** — it fits to

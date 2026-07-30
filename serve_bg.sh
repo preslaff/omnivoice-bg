@@ -12,12 +12,17 @@ cd "$(dirname "$0")"
 # Production stack (E3 sparse dialect, shipped 2026-07-18):
 #   MODEL    = bright T5 recipe refreshed on SPARSE marks (natural prosody,
 #              no mark-triggered ч/щ/с over-articulation).
-#   ACCENTOR = ft6b (battery 16/25, OOD SER 0.005%).
+#   ACCENTOR = ft7d (promoted 2026-07-30). Battery v1 22/25, v2 22/25 (unseen
+#              contexts), wild SER 0.059% (unseen register — all best-in-class).
+#              ALL homograph imperatives (прави́/ходи́/носи́/говори́/купи́/учи́)
+#              now resolve contextually — the imperative pins are retired.
+#              Residuals само/вълна/чета are context-dependent and default to the
+#              common reading (not pinnable). Prior: ft6b (battery 15-16/25).
 #   SPARSE_KEEP = marks only homographs + hard words + override pins; the
 #              F9-matched dialect for the model above. Empty SPARSE_KEEP =>
 #              dense marking (only correct with a dense-trained model).
 MODEL="${OMNIVOICE_BG_MODEL:-exp/omnivoice_bg_e3_sparse/checkpoint-3000}"
-ACCENTOR="${OMNIVOICE_BG_ACCENTOR:-exp/accentor_ft6b/last.pt}"
+ACCENTOR="${OMNIVOICE_BG_ACCENTOR:-exp/accentor_ft7d/best.pt}"
 SPARSE_KEEP="${OMNIVOICE_BG_SPARSE_KEEP:-config/bg/sparse_keep.json}"
 LEXICON="${OMNIVOICE_BG_LEXICON:-data/bg_lexicon/bg_stress.sqlite}"
 OVERRIDES="${OMNIVOICE_BG_OVERRIDES:-config/bg/bg_stress_overrides.json}"
