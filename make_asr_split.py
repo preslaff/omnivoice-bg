@@ -66,12 +66,21 @@ def main():
         "exp/kaldi_pilot/data/parl_new2_cleaned",   # folded in if it exists
     ])
     ap.add_argument("--out", default="data/lhotse/bg/split")
+    ap.add_argument("--exclude", default="data/lhotse/bg/stale_sessions.txt",
+                    help="blocklist of stale sessions (detect_stale_sessions.py) to drop entirely")
     ap.add_argument("--test-parl-h", type=float, default=15.0)
     ap.add_argument("--dev-parl-h", type=float, default=6.0)
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
     dur = rec_durations(args.dirs)
+    ex = pathlib.Path(args.exclude)
+    excl = set(ex.read_text(encoding="utf-8").split()) if ex.exists() else set()
+    if excl:
+        dropped = [r for r in dur if r in excl]
+        for r in dropped:
+            del dur[r]
+        print(f"excluded {len(dropped)} stale sessions ({args.exclude}) from the split")
     parl = [(r, s) for r, s in dur.items() if is_parliament(r)]
     audio = [(r, s) for r, s in dur.items() if not is_parliament(r)]
     ph = sum(s for _, s in parl) / 3600
