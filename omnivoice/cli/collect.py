@@ -146,33 +146,39 @@ def build_bank(verbs_path: pathlib.Path, frames_path: pathlib.Path):
     return bank
 
 
-def speaker_order(bank, speaker: str, count_by_prompt=None, target: int = 1):
-    """Per-speaker prompt ordering.
+def speaker_order(bank, speaker: str, count_by_prompt=None, target: int = 1, done=None):
+    """Per-speaker prompt ordering with VERB ROTATION.
 
-    Dominated by a per-(speaker, prompt) pseudo-random score, so different
-    volunteers traverse the bank in DIFFERENT orders — no more everyone starting
-    on the same sentences and nobody reaching the tail. High-value prompts are
-    gently pulled forward and already-covered prompts pushed back, but NEITHER
-    dominates the randomness, so the whole bank stays reachable.
+    Primary key = how many prompts of each verb THIS speaker has already recorded,
+    so every next prompt is drawn from the verb they've done LEAST → a session
+    cycles through DIFFERENT verbs. This fixes the "it repeats the same phrases"
+    complaint: previously the order diversified prompts but not verbs, so a
+    volunteer got прави/прави/прави in different frames (near-identical to the ear).
 
-    (Previously the sort key was (-priority, hash): priority was absolute, so
-    every speaker drained the entire high-value pool first and the rest was never
-    reached; coverage was ignored, so covered prompts kept being served.)"""
+    Within a verb tier: least-globally-covered frame first, a gentle high-value
+    nudge, and a per-(speaker, prompt) random tie-break so different volunteers
+    diverge and the whole bank stays reachable. `done` = this speaker's recorded/
+    skipped prompt-ids (drives the rotation; server-remembered from submissions)."""
     count_by_prompt = count_by_prompt or {}
+    done = done or set()
     seed = int(hashlib.sha256(speaker.encode()).hexdigest()[:8], 16)
+    # how many prompts of each verb this speaker has already done → the rotation key
+    verb_done: dict[str, int] = {}
+    for r in bank:
+        if r["id"] in done:
+            verb_done[r["verb"]] = verb_done.get(r["verb"], 0) + 1
 
     def score(row):
         h = int(hashlib.sha256(f"{seed}:{row['id']}".encode()).hexdigest()[:8], 16)
         rnd = h / 0xFFFFFFFF                                   # uniform [0, 1)
         cov = min(count_by_prompt.get(row["id"], 0) / max(target, 1), 1.0)
-        # lower score served first. Randomness LEADS (full [0,1) spread) so
-        # volunteers diverge and every prompt is reachable. High value only
-        # nudges forward (up to 0.09 off, priority 0..3) — deliberately gentle:
-        # there are ~900 high-value prompts, so a heavier nudge floods the head
-        # with them and the tail is never reached (the exact bug we're fixing).
-        # It still leads on average, so high value fills first, then coverage
-        # sinks a satisfied prompt hard (+0.60) and it drops out of rotation.
-        return rnd - 0.03 * row["priority"] + 0.60 * cov
+        # verb_done is an INTEGER and dominates — the sub-1 terms only order WITHIN
+        # a verb tier: rotate to the least-recorded verb, then least-covered frame
+        # (+0.5), gentle high-value pull (−0.05·priority), random tie-break (+0.4)
+        # so volunteers diverge. As a verb is recorded its tier rises and the next
+        # prompt comes from a fresh verb.
+        return (verb_done.get(row["verb"], 0)
+                - 0.05 * row["priority"] + 0.5 * cov + 0.4 * rnd)
 
     return sorted(bank, key=score)
 
@@ -283,6 +289,9 @@ INDEX_HTML = """<!doctype html>
 <div id="rec" class="card" hidden>
   <div class="hint" id="progress">—</div>
   <div class="bar"><div id="progbar"></div></div>
+  <div style="text-align:right;margin:-.2rem 0 .4rem">
+    <a href="#" onclick="switchSpeaker();return false" style="font-size:.78em;opacity:.55">смени потребител</a>
+  </div>
   <div class="prompt" id="prompt">…</div>
   <div class="row" id="reprow">
     <button class="rec" id="record">● Запиши</button>
@@ -316,10 +325,29 @@ document.getElementById("start").onclick = async () => {
   sex = document.getElementById("sex").value;
   speaker = nick;
   localStorage.setItem("ov_speaker", speaker);
+  localStorage.setItem("ov_sex", sex);
   document.getElementById("consent").hidden = true;
   document.getElementById("rec").hidden = false;
   await nextPrompt();
 };
+
+// Auto-resume a returning volunteer — the server remembers their done-set (from
+// submissions.jsonl), so restoring the saved speaker continues where they left
+// off instead of re-running the consent gate and re-seeing early prompts.
+(function resume(){
+  const saved = localStorage.getItem("ov_speaker");
+  if(!saved) return;
+  speaker = saved; sex = localStorage.getItem("ov_sex") || "";
+  document.getElementById("consent").hidden = true;
+  document.getElementById("rec").hidden = false;
+  nextPrompt();
+})();
+
+function switchSpeaker(){
+  if(!confirm("Смяна на потребител? Ще започнете нова сесия.")) return;
+  localStorage.removeItem("ov_speaker"); localStorage.removeItem("ov_sex");
+  location.reload();
+}
 
 async function nextPrompt(){
   const msg = document.getElementById("msg"); msg.textContent="";
@@ -537,7 +565,7 @@ def build_app(bank, out_dir: pathlib.Path, min_sec: float, max_sec: float,
             raise HTTPException(status_code=400, detail="speaker required")
         with lock:
             done = done_by_speaker.get(speaker, set())
-            order = speaker_order(bank, speaker, count_by_prompt, target_per_prompt)
+            order = speaker_order(bank, speaker, count_by_prompt, target_per_prompt, done)
             # skip prompts this speaker already did/flagged AND prompts that have
             # already reached the crowd target (so coverage spreads to the tail).
             nxt = next((r for r in order
