@@ -17,10 +17,17 @@ v1 model on **non-parliament** Bulgarian audio to quantify robustness beyond the
 - **Caveat:** the AB400 audiobook is already **in the training set**, so it cannot serve as a
   clean OOD test (leakage). A true general-purpose eval needs **held-out non-parliament**
   audio with zero overlap with training.
-- **Candidates:** Common Voice BG, FLEURS BG (Google), or a fresh *chitanka* audiobook slice
-  confirmed absent from training. ("chitanka" is a literary corpus — verify no audio overlap.)
-- **Deliverable:** an OOD WER row alongside the in-domain 5.29% → shows how far generalization
-  holds off-domain (expect meaningfully higher; that gap is the point).
+- **NOTE on the wiki tool:** `fetch_eval_wild.py` (→ `data/eval_wild/wiki.txt`) pulls unseen
+  BG Wikipedia **text** — built for out-of-register *Accentor* eval (`eval_accentor_ood.py`),
+  it has **no audio**, so it can't be an ASR test set directly. Do NOT synthesize audio from
+  it via TTS and ASR that back — circular (tests TTS artifacts, doubly so with our own TTS).
+- **Best fit — FLEURS BG** (Google): Bulgarian **Wikipedia sentences read aloud** with audio +
+  transcripts — the audio analog of `fetch_eval_wild.py`, genuinely OOD vs. parliament (read
+  register, different speakers, clean recording). **Common Voice BG** (Mozilla) as a second
+  OOD row (more speakers/noise). Score both with the SAME normalizer (`bg_verbalize` +
+  case/punct/stress) as the Whisper harness.
+- **Deliverable:** an OOD WER row (FLEURS ± Common Voice) alongside the in-domain 5.29% →
+  shows how far generalization holds off-domain (expect meaningfully higher; that gap is the point).
 
 ### 2. V2 training with the re-segmented data
 Execute [BG_ASR_V2_PLAN.md](BG_ASR_V2_PLAN.md): recover the 110 quarantined sessions
