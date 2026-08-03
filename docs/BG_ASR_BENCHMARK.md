@@ -73,7 +73,51 @@ streaming (a `--causal 1` variant would be a separate run).
 
 ## Next
 
-- **v2**: recover the 110 quarantined sessions (+~257 h, train only), self-clean in-bounds
-  desync with this baseline, retrain, decode the **same** frozen test → v1↔v2 delta.
-- Optional: Kaldi TDNN-F chain baseline (second system), Whisper comparison row, sherpa-onnx
-  int8 export for edge deployment, CER alongside WER.
+- **v2** (primary, product-improving): recover the 110 quarantined sessions (+~257 h, train
+  only), self-clean in-bounds desync with this baseline, retrain, decode the **same** frozen
+  test → v1↔v2 delta. See [BG_ASR_V2_PLAN.md](BG_ASR_V2_PLAN.md).
+
+## Future work / benchmark TODO
+
+These add benchmark credibility, not product WER — the transducer is already the best system.
+
+### Whisper external comparison — RECOMMENDED (cheap, high-legibility)
+
+The single most legible external reference: "Zipformer 5.29% vs Whisper-large-v3 X%" on the
+**same frozen test set**. Zero-shot (never trained on this data), so it answers "does the
+custom 649 h model beat the best off-the-shelf multilingual model?" — almost certainly yes,
+a favorable result to report.
+
+- **HARD REQUIREMENT — normalization parity.** Whisper emits cased/punctuated text with
+  digits; the references are lowercase/no-punct/stress-stripped/numbers-spelled-out. Run
+  **both** Whisper hypotheses AND references through ONE identical normalizer matching
+  `prep_lhotse_manifests.py` / `prep_lm_text.py` (lowercase, strip punctuation + U+0301,
+  normalize numbers/dates). Skipping this unfairly penalizes Whisper for punctuation/casing
+  it produced correctly — the comparison becomes meaningless.
+- **Setup (no training, ~an afternoon):** `faster-whisper` (CT2) on the test cuts — short
+  pre-segmented cuts sidestep Whisper's long-form hallucination — score with `jiwer`
+  (`eval` extra) through the shared normalizer. Model: `large-v3`; optionally a BG HF
+  fine-tune as a second external row.
+
+### Kaldi TDNN-F chain baseline (2nd system) — DEFERRED
+
+Skipped for v1: the k2 build succeeded and the transducer is the best system, so a hybrid
+HMM/TDNN-F won't beat 5.29% (expect it to land ~6–8%). The original "ship a number first /
+k2-build contingency" rationale is spent. Build it only if publishing a formal benchmark or
+if lattices/confidences are needed downstream.
+
+- **Value if built:** an independent *second paradigm* (WFST + n-gram + phone lexicon + HMM)
+  → publication credibility; a cross-check that validates the split / normalization /
+  references (both systems landing in a sensible range ⇒ no leakage/normalization bug); a
+  reference floor; word-level lattices + confidence scores + forced alignment.
+- **Cost/risk:** LOW install risk — reuses `tri4b`, `train_cleaned` alignments, `data/lang`,
+  the word KenLM, `~/kaldi` chainbin. Recipe scoped in [BG_ASR_PLAN.md](BG_ASR_PLAN.md)
+  step 4 (new tree from `tri4b` → `chain-make-den-fst` → LF-MMI → `mkgraph` → decode).
+  Multi-day effort; aligner dirs stay read-only.
+
+### Other
+
+- **CER alongside WER** — Bulgarian is inflectional (near-miss endings count as full word
+  subs); CER is a useful companion metric, cheap from the existing `recogs-*` files.
+- **sherpa-onnx int8 export** — shippable standalone recognizer for edge deployment (~66 MB).
+- **`--causal 1` streaming variant** — separate run if word-level live streaming is needed.
