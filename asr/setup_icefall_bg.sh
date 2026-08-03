@@ -31,6 +31,74 @@ rm -rf "$REC/zipformer"
 # that would dangle when copied outside egs/librispeech. Copy real files instead.
 cp -rL "$SRC" "$REC/zipformer"
 cp "$OMNI/asr/bg_asr_datamodule.py" "$REC/zipformer/asr_datamodule.py"
+
+# Re-apply the BG --eval-set {dev,test} switch to decode.py. Librispeech's decode.py
+# hardwires test-clean/test-other; BG has a single dev/test holdout and must keep test
+# pristine during tuning. The cp -rL above overwrites any prior patch, so we re-apply it
+# here. Idempotent; fails loudly if an anchor drifts (upstream decode.py changed).
+python3 - "$REC/zipformer/decode.py" <<'PYEOF'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text(encoding="utf-8")
+if "--eval-set" in s:
+    print("  decode.py already has --eval-set — nothing to patch"); raise SystemExit(0)
+edits = [
+(
+'''    parser.add_argument(
+        "--lang-dir",
+        type=Path,
+        default="data/lang_bpe_500",
+        help="The lang dir containing word table and LG graph",
+    )
+
+    parser.add_argument(
+        "--decoding-method",''',
+'''    parser.add_argument(
+        "--lang-dir",
+        type=Path,
+        default="data/lang_bpe_500",
+        help="The lang dir containing word table and LG graph",
+    )
+
+    parser.add_argument(
+        "--eval-set",
+        type=str,
+        default="test",
+        choices=["dev", "test"],
+        help="BG holdout to decode: 'dev' (tune freely) or 'test' (frozen "
+        "benchmark - decode once). Keeps the test set pristine during tuning.",
+    )
+
+    parser.add_argument(
+        "--decoding-method",'''
+),
+(
+'''    test_clean_cuts = librispeech.test_clean_cuts()
+    test_other_cuts = librispeech.test_other_cuts()
+
+    test_clean_dl = librispeech.test_dataloaders(test_clean_cuts)
+    test_other_dl = librispeech.test_dataloaders(test_other_cuts)
+
+    test_sets = ["test-clean", "test-other"]
+    test_dl = [test_clean_dl, test_other_dl]''',
+'''    # BG: single-set holdout. --eval-set dev tunes freely; --eval-set test is the
+    # frozen benchmark (decode once). The librispeech *_other sets are empty for BG.
+    if params.eval_set == "dev":
+        eval_cuts = librispeech.dev_clean_cuts()
+    else:
+        eval_cuts = librispeech.test_clean_cuts()
+
+    test_sets = [params.eval_set]
+    test_dl = [librispeech.test_dataloaders(eval_cuts)]'''
+),
+]
+for anchor, new in edits:
+    if anchor not in s:
+        sys.exit("ERROR: decode.py patch anchor not found (upstream changed?):\n"
+                 + anchor.splitlines()[0])
+    s = s.replace(anchor, new, 1)
+p.write_text(s, encoding="utf-8")
+print("  patched decode.py with --eval-set {dev,test}")
+PYEOF
 [ -e "$ICEFALL/egs/librispeech/ASR/shared" ] && \
   ln -sfn "$ICEFALL/egs/librispeech/ASR/shared" "$REC/shared"
 ln -sfn "$OMNI/data/fbank"          "$REC/data/fbank"
