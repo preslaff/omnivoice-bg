@@ -23,6 +23,7 @@ non-masculine noun), far better than the raw-digit mismatch.
     ./venv/bin/python eval_whisper_bg.py                 # full frozen test set (~up to ~1h)
 """
 import argparse
+import itertools
 import re
 import sys
 import pathlib
@@ -52,14 +53,17 @@ def main():
     import jiwer
 
     out = pathlib.Path(args.out_dir); out.mkdir(parents=True, exist_ok=True)
-    cuts = CutSet.from_file(args.cuts)
-    ids = list(cuts.ids)
-    if args.limit:
-        ids = ids[: args.limit]
-    print(f"scoring {len(ids):,} cuts from {args.cuts} with Whisper {args.model}")
+    cuts = CutSet.from_file(args.cuts)           # lazy manifest — iterate, do NOT index by id
+
+    def cut_stream():
+        it = iter(cuts)
+        return itertools.islice(it, args.limit) if args.limit else it
+
+    lim = f" (limit {args.limit})" if args.limit else ""
+    print(f"scoring cuts from {args.cuts}{lim} with Whisper {args.model}")
 
     # parity self-check: the normalizer must not mangle already-clean references
-    sample = [cuts[i].supervisions[0].text for i in ids[:200]]
+    sample = [c.supervisions[0].text for c in itertools.islice(iter(cuts), 200)]
     changed = sum(1 for t in sample if normalize(t) != t)
     print(f"parity check: {changed}/{len(sample)} sampled refs change under normalize "
           f"(expected ~0 — refs are already normalized)")
@@ -69,8 +73,8 @@ def main():
     refs, hyps, hyp_digit_tokens = [], [], 0
     recog = out / f"recogs-test-whisper-{args.model}.txt"
     with recog.open("w", encoding="utf-8") as w:
-        for n, cid in enumerate(ids, 1):
-            c = cuts[cid]
+        for n, c in enumerate(cut_stream(), 1):
+            cid = c.id
             audio = c.load_audio()[0]            # (samples,) float32 @ 16 kHz
             segments, _ = model.transcribe(audio, language=args.language,
                                            beam_size=args.beam_size)
@@ -81,7 +85,7 @@ def main():
             refs.append(ref); hyps.append(hyp)
             w.write(f"{cid}:\tref={ref}\n{cid}:\thyp={hyp}\n")
             if n % 100 == 0:
-                print(f"  {n}/{len(ids)}  running WER={jiwer.wer(refs, hyps)*100:.2f}%")
+                print(f"  {n}  running WER={jiwer.wer(refs, hyps)*100:.2f}%")
 
     m = jiwer.process_words(refs, hyps)
     wer = m.wer * 100
