@@ -68,8 +68,12 @@ def main():
     print(f"parity check: {changed}/{len(sample)} sampled refs change under normalize "
           f"(expected ~0 — refs are already normalized)")
 
+    print(f"loading Whisper {args.model} (first run downloads the weights ~3GB; if it "
+          f"stalls, Ctrl-C and re-run with HF_ENDPOINT=https://hf-mirror.com)…", flush=True)
     model = WhisperModel(args.model, device=args.device, compute_type=args.compute_type)
+    print("  model ready; transcribing…", flush=True)
 
+    step = 10 if args.limit and args.limit <= 200 else 100     # frequent progress on smokes
     refs, hyps, hyp_digit_tokens = [], [], 0
     recog = out / f"recogs-test-whisper-{args.model}.txt"
     with recog.open("w", encoding="utf-8") as w:
@@ -84,7 +88,7 @@ def main():
             hyp_digit_tokens += sum(1 for t in hyp.split() if _ISDIGIT.match(t))
             refs.append(ref); hyps.append(hyp)
             w.write(f"{cid}:\tref={ref}\n{cid}:\thyp={hyp}\n")
-            if n % 100 == 0:
+            if n % step == 0:
                 print(f"  {n}  running WER={jiwer.wer(refs, hyps)*100:.2f}%")
 
     m = jiwer.process_words(refs, hyps)
