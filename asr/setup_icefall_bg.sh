@@ -63,9 +63,9 @@ edits = [
         "--eval-set",
         type=str,
         default="test",
-        choices=["dev", "test"],
-        help="BG holdout to decode: 'dev' (tune freely) or 'test' (frozen "
-        "benchmark - decode once). Keeps the test set pristine during tuning.",
+        help="BG holdout to decode: 'dev', 'test', or a PATH to a cuts .jsonl.gz "
+        "(OOD sets - FLEURS, Common Voice). 'test' is the frozen benchmark - decode "
+        "once. Keeps the test set pristine during tuning.",
     )
 
     parser.add_argument(
@@ -80,14 +80,19 @@ edits = [
 
     test_sets = ["test-clean", "test-other"]
     test_dl = [test_clean_dl, test_other_dl]''',
-'''    # BG: single-set holdout. --eval-set dev tunes freely; --eval-set test is the
-    # frozen benchmark (decode once). The librispeech *_other sets are empty for BG.
+'''    # BG: 'dev'/'test' = frozen holdout via the datamodule; any other value is a PATH to a
+    # cuts file (OOD eval - FLEURS, Common Voice) whose supervisions are already normalized.
+    # --eval-set test is the decode-once benchmark.
     if params.eval_set == "dev":
-        eval_cuts = librispeech.dev_clean_cuts()
+        eval_cuts = librispeech.dev_clean_cuts(); set_name = "dev"
+    elif params.eval_set == "test":
+        eval_cuts = librispeech.test_clean_cuts(); set_name = "test"
     else:
-        eval_cuts = librispeech.test_clean_cuts()
+        from lhotse import load_manifest_lazy
+        eval_cuts = load_manifest_lazy(params.eval_set)
+        set_name = Path(params.eval_set).name.replace(".jsonl.gz", "")
 
-    test_sets = [params.eval_set]
+    test_sets = [set_name]
     test_dl = [librispeech.test_dataloaders(eval_cuts)]'''
 ),
 ]

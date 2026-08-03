@@ -28,20 +28,9 @@ import sys
 import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bg_verbalize import normalize as verbalize_bg   # digits -> BG words (gender-aware)
+from bg_text_norm import normalize                # shared hyp/ref normalizer (parity, single source)
 
-ACUTE = "́"
-_PUNCT = re.compile(r"[^\w\s]", re.UNICODE)      # keeps Cyrillic letters, digits, spaces
 _ISDIGIT = re.compile(r"^\d+$")
-
-
-def normalize(s):
-    """Shared normalizer — applied IDENTICALLY to hyp and ref (parity is the whole point)."""
-    s = verbalize_bg(s.lower())                  # expand numbers -> BG words (no digits remain)
-    s = s.replace(ACUTE, "")
-    s = _PUNCT.sub(" ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return " ".join(t for t in s.split() if t != "<unk>")
 
 
 def main():
