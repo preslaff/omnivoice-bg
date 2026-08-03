@@ -48,18 +48,26 @@ def download(url, dst):
     if dst.exists() and dst.stat().st_size > 0:
         print(f"  [cache] {dst.name} ({dst.stat().st_size/1e6:.0f} MB)")
         return
+    tmp = pathlib.Path(str(dst) + ".part")
     print(f"  downloading {dst.name} …")
-
-    def hook(blocks, bs, total):
-        done = blocks * bs
-        if total > 0:
-            pct = min(100, 100 * done / total)
-            print(f"\r    {done/1e6:6.0f} / {total/1e6:.0f} MB  ({pct:4.1f}%)", end="", flush=True)
-
-    tmp = dst.with_suffix(dst.suffix + ".part")
-    urllib.request.urlretrieve(url, tmp, reporthook=hook)
-    tmp.rename(dst)
+    req = urllib.request.Request(url, headers={"User-Agent": "omnivoice-eval/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        total = int(r.headers.get("Content-Length") or 0)
+        done = 0
+        with open(tmp, "wb") as f:                       # explicit chunked write (robust)
+            while True:
+                chunk = r.read(1 << 20)
+                if not chunk:
+                    break
+                f.write(chunk)
+                done += len(chunk)
+                if total:
+                    print(f"\r    {done/1e6:6.0f} / {total/1e6:.0f} MB  "
+                          f"({100*done/total:4.1f}%)", end="", flush=True)
     print()
+    if not tmp.exists() or tmp.stat().st_size == 0:
+        raise RuntimeError(f"download produced no file at {tmp}")
+    os.replace(tmp, dst)                                 # atomic finalize
 
 
 def main():
