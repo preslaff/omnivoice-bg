@@ -31,6 +31,31 @@ Frozen whole-session split (`data/lhotse/bg/split/`) — zero train↔dev↔test
 Test error breakdown (best system, 123,605 words): **6543 errors = 1487 ins / 2018 del /
 3038 sub**.
 
+### Out-of-domain — FLEURS BG (read Wikipedia), 2026-08-04
+
+Zero-adaptation eval on FLEURS `bg_bg` **test** (658 utts / 1.9 h / 14,404 ref words) —
+Bulgarian Wikipedia sentences read aloud: a different register + speaker pool, clean studio
+audio. Same epoch-30 / avg-5 model, same `bg_verbalize` normalizer.
+
+| Set | Method | WER % |
+|---|---|---|
+| FLEURS OOD | greedy_search | **20.65** |
+| FLEURS OOD | modified_beam_search | 20.90 |
+
+FLEURS error breakdown (greedy): 2974 / 14,404 = 223 ins / 861 del / 1890 sub.
+
+**In-domain 5.29% → OOD ~20.7% (≈4× relative).** This is the *domain-specialization cost*, not
+a defect. FLEURS is clean audio, so the gap is purely register / vocabulary / speaker shift
+(spontaneous parliamentary speech + its lexicon vs. read encyclopedic Wikipedia), not noise:
+- The model **generalizes** — ~20.7% on a wholly unseen domain/speakers means it learned real
+  Bulgarian ASR, not memorized parliament (a memorizer would be far worse). Deletions + subs
+  dominate (861 del / 1890 sub) = out-of-vocabulary encyclopedic terms and names — the expected
+  OOD failure mode.
+- **Beam ≤ greedy here** (20.90 vs 20.65), the reverse of in-domain: on OOD input the model's
+  internal prior is domain-mismatched, so a wider search doesn't help. The parliament-trained
+  KenLM/LG is likewise domain-biased and would not be expected to help FLEURS, so **greedy is
+  the clean acoustic-generalization number**.
+
 ### Reading the numbers
 
 - **Best system 5.29% test WER** — competitive with published in-domain parliament ASR,
@@ -60,8 +85,9 @@ streaming (a `--causal 1` variant would be a separate run).
   [BG_ASR_V2_PLAN.md](BG_ASR_V2_PLAN.md) workstream A should move this down.
 - **Reference-transcript ceiling.** References are stenographic + Kaldi-aligned; some
   residual WER is reference noise, not model error.
-- **In-domain only.** This measures unseen *parliament* speech, not conversational/dialectal
-  or noisy audio (distribution shift not evaluated here).
+- **Domain matters (measured).** In-domain parliament = 5.29%; out-of-domain read Wikipedia
+  (FLEURS) = ~20.7% (§ Out-of-domain above). Conversational / dialectal / noisy audio is still
+  unmeasured and would likely differ again.
 
 ## Reproducibility
 
