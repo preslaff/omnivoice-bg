@@ -23,6 +23,7 @@ Decode with the epoch-30 model (note the generalized --eval-set accepts a cut pa
     ./venv/bin/python prep_fleurs_bg.py --limit 50      # smoke
 """
 import argparse
+import itertools
 import os
 import pathlib
 
@@ -38,6 +39,9 @@ def main():
     ap.add_argument("--num-mel-bins", type=int, default=80)
     ap.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 4))
     ap.add_argument("--limit", type=int, default=0, help="only first N examples (smoke)")
+    ap.add_argument("--no-streaming", action="store_true",
+                    help="download the full split instead of streaming it (streaming avoids "
+                         "pulling the large TRAIN parquet — only the requested split is fetched)")
     args = ap.parse_args()
 
     from datasets import load_dataset
@@ -52,14 +56,22 @@ def main():
         print(f"[skip] {manifest} exists — delete to rebuild"); return
     adir = pathlib.Path(args.audio_dir); adir.mkdir(parents=True, exist_ok=True)
 
-    print(f"loading {args.dataset}:{args.config} split={args.split}")
-    ds = load_dataset(args.dataset, args.config, split=args.split)
-    if args.limit:
-        ds = ds.select(range(min(args.limit, len(ds))))
-    print(f"{len(ds):,} examples")
+    stream = not args.no_streaming
+    print(f"loading {args.dataset}:{args.config} split={args.split} (streaming={stream})")
+    if stream:
+        # streaming fetches ONLY the requested split, incrementally — avoids the big TRAIN
+        # parquet and starts producing examples immediately.
+        ds = load_dataset(args.dataset, args.config, split=args.split, streaming=True)
+        examples = itertools.islice(ds, args.limit) if args.limit else ds
+    else:
+        ds = load_dataset(args.dataset, args.config, split=args.split)
+        examples = ds.select(range(min(args.limit, len(ds)))) if args.limit else ds
+        print(f"{len(ds):,} examples")
 
     cuts, dropped = [], 0
-    for ex in ds:
+    for i, ex in enumerate(examples, 1):
+        if i % 100 == 0:
+            print(f"  {i} examples...")
         a = ex["audio"]
         arr, sr = a["array"], a["sampling_rate"]
         # reference: raw (with punctuation) -> our normalizer, so it matches training targets
