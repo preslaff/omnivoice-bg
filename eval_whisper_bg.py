@@ -53,6 +53,7 @@ def main():
     import jiwer
 
     out = pathlib.Path(args.out_dir); out.mkdir(parents=True, exist_ok=True)
+    label = pathlib.Path(args.model).name        # --model may be a local dir path
     cuts = CutSet.from_file(args.cuts)           # lazy manifest — iterate, do NOT index by id
 
     def cut_stream():
@@ -75,7 +76,7 @@ def main():
 
     step = 10 if args.limit and args.limit <= 200 else 100     # frequent progress on smokes
     refs, hyps, hyp_digit_tokens = [], [], 0
-    recog = out / f"recogs-test-whisper-{args.model}.txt"
+    recog = out / f"recogs-test-whisper-{label}.txt"
     with recog.open("w", encoding="utf-8") as w:
         for n, c in enumerate(cut_stream(), 1):
             cid = c.id
@@ -94,10 +95,10 @@ def main():
     m = jiwer.process_words(refs, hyps)
     wer = m.wer * 100
     ref_words = m.hits + m.substitutions + m.deletions
-    summary = out / f"wer-summary-test-whisper-{args.model}.txt"
+    summary = out / f"wer-summary-test-whisper-{label}.txt"
     summary.write_text(
         f"system\tWER\tsub\tdel\tins\thits\thyp_digit_tokens\n"
-        f"whisper-{args.model}\t{wer:.2f}\t{m.substitutions}\t{m.deletions}\t"
+        f"whisper-{label}\t{wer:.2f}\t{m.substitutions}\t{m.deletions}\t"
         f"{m.insertions}\t{m.hits}\t{hyp_digit_tokens}\n", encoding="utf-8")
     print(f"\nWhisper {args.model}  test WER = {wer:.2f}%  "
           f"(sub {m.substitutions} / del {m.deletions} / ins {m.insertions} / {ref_words} ref words)")
