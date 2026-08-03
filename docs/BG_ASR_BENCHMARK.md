@@ -88,16 +88,20 @@ The single most legible external reference: "Zipformer 5.29% vs Whisper-large-v3
 custom 649 h model beat the best off-the-shelf multilingual model?" — almost certainly yes,
 a favorable result to report.
 
-- **HARD REQUIREMENT — normalization parity.** Whisper emits cased/punctuated text with
-  digits; the references are lowercase/no-punct/stress-stripped/numbers-spelled-out. Run
-  **both** Whisper hypotheses AND references through ONE identical normalizer matching
-  `prep_lhotse_manifests.py` / `prep_lm_text.py` (lowercase, strip punctuation + U+0301,
-  normalize numbers/dates). Skipping this unfairly penalizes Whisper for punctuation/casing
-  it produced correctly — the comparison becomes meaningless.
-- **Setup (no training, ~an afternoon):** `faster-whisper` (CT2) on the test cuts — short
-  pre-segmented cuts sidestep Whisper's long-form hallucination — score with `jiwer`
-  (`eval` extra) through the shared normalizer. Model: `large-v3`; optionally a BG HF
-  fine-tune as a second external row.
+- **Harness:** `eval_whisper_bg.py` (faster-whisper large-v3 on the frozen test cuts →
+  shared normalizer → `jiwer`). Short pre-segmented cuts sidestep Whisper's long-form
+  hallucination. Install: `pip install faster-whisper jiwer`.
+- **Normalization parity (handled):** both Whisper output and references go through one
+  normalizer — lowercase, strip punctuation, strip U+0301 — so Whisper isn't penalized for
+  casing/punctuation it produced correctly. A parity self-check confirms the normalizer
+  leaves already-clean references unchanged.
+- **Numbers — known residual caveat.** Test refs spell numbers as words (0% contain digits)
+  and `num2words` has **no Bulgarian support** (Bulgarian needs gender agreement два/две), so
+  Whisper's digit output can't be reliably mapped to the spelled form. Each spoken number
+  Whisper writes as a digit costs ~1 error → reported Whisper WER is a slight **upper bound**.
+  The harness prints how many pure-digit tokens Whisper emitted so the magnitude is visible.
+  Tightening it (gender-aware BG speller, or Whisper `suppress_tokens` to force spelling) is
+  future work. Optionally add a BG HF fine-tune as a second external row.
 
 ### Kaldi TDNN-F chain baseline (2nd system) — DEFERRED
 
