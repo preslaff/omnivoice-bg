@@ -26,7 +26,10 @@ done
 
 mkdir -p "$REC/data"
 rm -rf "$REC/zipformer"
-cp -r "$SRC" "$REC/zipformer"
+# -L dereferences symlinks: librispeech/zipformer has relative symlinks
+# (asr_datamodule.py, beam_search.py, encoder_interface.py -> ../other_recipe/...)
+# that would dangle when copied outside egs/librispeech. Copy real files instead.
+cp -rL "$SRC" "$REC/zipformer"
 cp "$OMNI/asr/bg_asr_datamodule.py" "$REC/zipformer/asr_datamodule.py"
 [ -e "$ICEFALL/egs/librispeech/ASR/shared" ] && \
   ln -sfn "$ICEFALL/egs/librispeech/ASR/shared" "$REC/shared"
