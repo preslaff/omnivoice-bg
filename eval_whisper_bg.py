@@ -10,13 +10,13 @@ NORMALIZATION PARITY. Whisper emits cased/punctuated text; references are lowerc
 no-punct / stress-stripped. BOTH go through ONE normalizer (lowercase, strip U+0301, strip
 punctuation) so Whisper is not penalized for casing/punctuation it produced correctly.
 
-NUMBERS — known residual caveat. The test references spell numbers out as words (0% contain
-digits) and `num2words` has NO Bulgarian support, so we cannot reliably map Whisper's digit
-output to the reference's spelled form (Bulgarian needs gender agreement: два/две). Wherever
-a number is spoken and Whisper emits a digit, that costs ~1 error — so the reported Whisper
-WER is a slight UPPER bound. Numbers are a minority of parliament tokens; the run prints how
-many pure-digit tokens Whisper emitted so the magnitude is visible. Tightening this (a
-gender-aware BG speller, or forcing Whisper to spell via suppress_tokens) is future work.
+NUMBERS. Whisper emits digits ("2024", "5"); the references spell numbers as words. We expand
+Whisper's digits with the project's OWN Bulgarian verbalizer `bg_verbalize.normalize` (the one
+built for the TTS/Accentor front-end) — gender-aware (два/две), with currency/%/date/time/
+ordinal handlers, and it guarantees no digits remain. This is applied to BOTH hyp and ref for
+parity (refs are 0% digits ⇒ a no-op there). Residual caveat: bare 1/2 default to masculine, so
+"2 реплики" → "два реплики" where the reference has "две" — a small subset (only 1/2 before a
+non-masculine noun), far better than the raw-digit mismatch.
 
     pip install faster-whisper jiwer
     ./venv/bin/python eval_whisper_bg.py --limit 50      # smoke test on 50 cuts
@@ -24,7 +24,11 @@ gender-aware BG speller, or forcing Whisper to spell via suppress_tokens) is fut
 """
 import argparse
 import re
+import sys
 import pathlib
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from bg_verbalize import normalize as verbalize_bg   # digits -> BG words (gender-aware)
 
 ACUTE = "́"
 _PUNCT = re.compile(r"[^\w\s]", re.UNICODE)      # keeps Cyrillic letters, digits, spaces
@@ -33,7 +37,8 @@ _ISDIGIT = re.compile(r"^\d+$")
 
 def normalize(s):
     """Shared normalizer — applied IDENTICALLY to hyp and ref (parity is the whole point)."""
-    s = s.replace(ACUTE, "").lower()
+    s = verbalize_bg(s.lower())                  # expand numbers -> BG words (no digits remain)
+    s = s.replace(ACUTE, "")
     s = _PUNCT.sub(" ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return " ".join(t for t in s.split() if t != "<unk>")
@@ -99,8 +104,8 @@ def main():
         f"{m.insertions}\t{m.hits}\t{hyp_digit_tokens}\n", encoding="utf-8")
     print(f"\nWhisper {args.model}  test WER = {wer:.2f}%  "
           f"(sub {m.substitutions} / del {m.deletions} / ins {m.insertions} / {ref_words} ref words)")
-    print(f"  number caveat: Whisper emitted {hyp_digit_tokens} pure-digit tokens vs 0 in refs "
-          f"(~{hyp_digit_tokens} of the errors are the spelled-vs-digit gap, an upper bound)")
+    print(f"  digit-token sanity: {hyp_digit_tokens} digits remain in hyps after verbalize "
+          f"(want ~0; residual = unhandled formats, not the number-word gap)")
     print(f"  transcripts -> {recog}")
     print(f"  summary     -> {summary}")
     print("Compare vs the Zipformer's 5.29% (fast_beam_search_nbest_LG) — SAME test set, SAME normalizer.")

@@ -95,13 +95,13 @@ a favorable result to report.
   normalizer — lowercase, strip punctuation, strip U+0301 — so Whisper isn't penalized for
   casing/punctuation it produced correctly. A parity self-check confirms the normalizer
   leaves already-clean references unchanged.
-- **Numbers — known residual caveat.** Test refs spell numbers as words (0% contain digits)
-  and `num2words` has **no Bulgarian support** (Bulgarian needs gender agreement два/две), so
-  Whisper's digit output can't be reliably mapped to the spelled form. Each spoken number
-  Whisper writes as a digit costs ~1 error → reported Whisper WER is a slight **upper bound**.
-  The harness prints how many pure-digit tokens Whisper emitted so the magnitude is visible.
-  Tightening it (gender-aware BG speller, or Whisper `suppress_tokens` to force spelling) is
-  future work. Optionally add a BG HF fine-tune as a second external row.
+- **Numbers — handled by the project verbalizer.** `num2words` has no Bulgarian support, so
+  the harness expands Whisper's digits with **`bg_verbalize.normalize`** (the gender-aware
+  verbalizer built for the TTS/Accentor front-end: два/две, currency/%/date/time/ordinal
+  handlers, guarantees no digits remain), applied to hyp AND ref for parity. Residual: bare
+  1/2 default to masculine ("2 реплики"→"два реплики" where the ref has "две") — a small subset,
+  vs. the guaranteed error of a raw digit. The run prints a digit-token sanity count (~0).
+  Optionally add a BG HF fine-tune as a second external row.
 
 ### Kaldi TDNN-F chain baseline (2nd system) — DEFERRED
 
