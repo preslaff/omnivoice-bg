@@ -58,6 +58,12 @@ caveat: ours via icefall, Whisper via `bg_verbalize`; both refs number-spelled, 
 
 ### Out-of-domain — FLEURS BG (read Wikipedia), 2026-08-04
 
+> ⚠️ **FLEURS numbers below (20.65 / 20.90, and Whisper 11.70) are UNDER RE-MEASUREMENT.** The
+> first `prep_fleurs_bg.py` keyed cut ids on the FLEURS `id` field, which is the *sentence* index
+> (repeats across speakers) — so 344 wavs were written for 658 cuts and 314 recordings were
+> double-counted while their second-speaker versions were dropped. Fixed to key on the unique
+> `path` (commit b96eb3a). Re-prep + re-decode pending; these rows will be replaced.
+
 Zero-adaptation eval on FLEURS `bg_bg` **test** (658 utts / 1.9 h / 14,404 ref words) —
 Bulgarian Wikipedia sentences read aloud: a different register + speaker pool, clean studio
 audio. Same epoch-30 / avg-5 model, same `bg_verbalize` normalizer.
