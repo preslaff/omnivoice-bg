@@ -53,6 +53,20 @@ Build a broader training set and retrain:
   **new unseen domain** (self-recorded set — see phase 1). **Target:** pull the ~20% OOD toward
   Whisper's ~15% while keeping parliament strong.
 
+### 2b. Model-size ladder — Zipformer-L gated on GP-v2 evidence (decided 2026-08-04)
+
+Change ONE variable at a time so effects stay attributable:
+- **GP-v2 = Zipformer-M (65M) on the ~1,750 h corpus** — isolates the DATA effect vs v1
+  (same architecture). Known VRAM behavior (M @ max-duration 350 ≈ 94.7% of 16 GB); ~1.5–2
+  days under `train_resumable.sh`.
+- **GP-v3 = Zipformer-L (~150M), only if GP-v2 shows capacity starvation** (train loss floors
+  early while dev still improves with data; or the mean-WER target is missed with data-side
+  levers exhausted). L needs `--max-duration ~200–250` on 16 GB (~2× compute/batch → ~3–4
+  days). Isolates the CAPACITY effect.
+- Deployment note: M stays the edge/streaming artifact (~66 MB int8 sherpa-onnx); L (if built)
+  is the server-side best model. Published M→L gains at ~1–2k h are ~5–10 % relative — worth
+  having only after the data levers (balance/mux, broad LM, self-training round 2) are spent.
+
 ### 3. Streaming model (`--causal 1`)
 Re-train the Zipformer as a **streaming** (chunk-wise, causal) model for real-time / on-device
 use. Reuses the same fbank + BPE + (v2) corpus; costs ~1–2 % abs WER vs offline but enables
