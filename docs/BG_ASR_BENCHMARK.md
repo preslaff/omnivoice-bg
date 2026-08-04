@@ -41,15 +41,20 @@ The specialist↔generalist crossover (same sets, same `bg_verbalize` normalizer
 | Test set | BG Zipformer (ours) | Whisper large-v3 | winner |
 |---|---|---|---|
 | Parliament (our domain) | **5.29** | 15.37 | ours, ~2.9× |
-| FLEURS (Whisper's domain) | 20.65 | **11.70** | Whisper, ~1.8× |
+| FLEURS (read Wikipedia, Whisper's turf) | 20.65 | **11.70** | Whisper, ~1.8× |
+| Common Voice (crowdsourced read, proxy neutral) | 22.27 | **15.42** | Whisper, ~1.4× |
 
-**Each model wins on its home turf, and the *shape* differs.** Ours is a **specialist** — superb
-in-domain (5.29) but a large domain swing (5.29→20.65, ~3.9×). Whisper is a **generalist** —
-never great, never bad, domain-robust (15.37 vs 11.70, ~1.3× swing). Neither dominates both, so
-a **neutral both-OOD set** (unseen by *both* — see [BG_ASR_ROADMAP.md](BG_ASR_ROADMAP.md)) is the
-real tiebreaker. Parliament-Whisper breakdown: 10,354 sub / 3,654 del / 5,035 ins / 123,874 words.
-Minor caveat: our numbers via icefall's scorer, Whisper's via `bg_verbalize`; both refs already
-number-spelled, so the paths differ << the gaps.
+**Each model wins its home turf, and the *shape* is the story.** Ours is a **specialist** — superb
+in-domain (5.29) but a large swing off-domain (~20–22% on both read-speech OOD sets, ~4×). Whisper
+is a **generalist** — flat ~11–15% across all three (~1.3× max/min), never great, never bad. On the
+(proxy) neutral Common Voice, Whisper wins 15.42 vs 22.27.
+
+**Neutrality caveat — read carefully:** Common Voice is public and almost certainly in Whisper's
+training. Tellingly, Whisper's CV (15.42) ≈ its parliament (15.37) — i.e. ~15% is just Whisper's
+general-Bulgarian baseline (possibly aided by having seen CV), so this still tilts toward Whisper.
+A **self-recorded fresh set** remains the only clean tiebreaker (see [BG_ASR_ROADMAP.md](BG_ASR_ROADMAP.md)).
+Parliament-Whisper breakdown: 10,354 sub / 3,654 del / 5,035 ins / 123,874 words. Minor scorer
+caveat: ours via icefall, Whisper via `bg_verbalize`; both refs number-spelled, so paths differ << the gaps.
 
 ### Out-of-domain — FLEURS BG (read Wikipedia), 2026-08-04
 
