@@ -30,6 +30,25 @@ GET `/api/media/<Id>`. Store audio + `Source`/`Description`/post metadata. Rate-
    for a research-use license is worth it** and de-risks the effort.
 2. **No transcripts.** These are pseudo-labeled (Whisper), so they are *weak supervision*, not gold.
 
+## Music / musical-play quarantine (data quality — REQUIRED)
+
+BNR archives contain **music, opera, and musical radio-plays** (songs, orchestral beds, sung
+drama). This is **poison for ASR**: Whisper transcribes music/lyrics unreliably, and music beds
+corrupt the acoustic targets. It MUST be quarantined. Two tiers:
+
+1. **Metadata is NOT enough** (verified 2026-08-04): segment `Description` is the generic
+   "Аудио файл" for ~all posts, and titles/slugs only sometimes hint at music — a text filter
+   would miss embedded music and wrongly drop *spoken* drama. Only cheap, reliable metadata move:
+   **drop the `muzika` category wholesale** (all music).
+2. **Audio-based speech/music segmentation (the real quarantine).** Run a broadcast speech/music
+   segmenter — **`inaSpeechSegmenter`** (INA, purpose-built for radio archives: labels each region
+   speech / music / noise) is the natural fit. Keep only **speech** regions, drop **music**. This
+   handles musical plays perfectly (drops the sung/music spans, keeps spoken dialogue) AND doubles
+   as the VAD/segmentation step feeding Whisper. NB: plain VAD (Silero) is NOT enough — singing
+   registers as "voice", so it wouldn't separate sung music from speech; use a speech-vs-MUSIC model.
+
+Order in the pipeline: **segment (speech/music) → keep speech → Whisper → faithfulness filter.**
+
 ## Pseudo-labeling pipeline — faithfulness over fluency
 
 Whisper transcribes (~15% WER on general BG — it's Whisper's own weak-supervision recipe applied
@@ -38,7 +57,8 @@ can only fix grammar/punctuation; where Whisper *misheard*, the LLM will drift t
 from what was said, and ASR training on text that reads well but does not match the audio is
 actively harmful. So:
 
-- **Keep labels FAITHFUL by FILTERING, not rewriting.** VAD-segment long broadcasts → Whisper →
+- **Keep labels FAITHFUL by FILTERING, not rewriting.** Speech/music-segment (keep speech, drop
+  music — above) → Whisper →
   keep only high-confidence segments and/or those where **forced alignment** (align Whisper text
   back to the audio, drop low-score spans) agrees. Faithful-but-noisy > fluent-but-wrong.
 - **BgGPT (if used at all) = light normalization only** — punctuation, casing, number spelling —
@@ -74,7 +94,8 @@ cherry-picking clean solo-narration segments with verified transcripts.
    know if this is ~50 h or ~5000 h before committing. *(Do this first.)*
 3. **Crawler** — sitemap → posts → `__NEXT_DATA__` → download `/api/media/<Id>`; store audio +
    metadata, Bulgarian-filtered, rate-limited.
-4. **Pseudo-label** — VAD → Whisper large-v3 → **faithfulness filter** (confidence + forced align);
+4. **Pseudo-label** — **speech/music-seg (inaSpeechSegmenter, drop music/musical-plays)** → Whisper
+   large-v3 → **faithfulness filter** (confidence + forced align);
    light normalization only → cuts (80-dim fbank @ 16 kHz, same `bg_text_norm`).
 5. **Fold into ASR training** (multi-domain, phase 2+) → general-purpose model. Optionally
    **self-training** iterations, or a **wav2vec2 SSL** side-track on the raw audio.
