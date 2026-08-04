@@ -81,6 +81,11 @@ def main():
     ap.add_argument("--out", default="data/lhotse/bg")
     ap.add_argument("--exclude", default="data/lhotse/bg/stale_sessions.txt",
                     help="blocklist of stale sessions (detect_stale_sessions.py) to skip entirely")
+    ap.add_argument("--reseg-dir", default=None,
+                    help="re-segmented Kaldi data dir (parl_restale_cleaned from "
+                         "resegment_stale_sessions.sh) that OVERRIDES the base --dirs for its "
+                         "sessions: fresh segments matching the CURRENT audio, NOT subject to the "
+                         "stale blocklist. Recovers the quarantined sessions for v2 (train only).")
     ap.add_argument("--jobs", type=int, default=min(32, os.cpu_count() or 8))
     args = ap.parse_args()
 
@@ -112,6 +117,26 @@ def main():
         text.update(txt)
         all_segs.extend(s for s in segs if s[1] not in stale)
         print(f"  {d}: {len(path):,} recs, {len(segs):,} segments parsed")
+
+    # --reseg-dir OVERRIDE: recovered sessions come EXCLUSIVELY from the re-segmented dir.
+    # Their stale segments were already dropped above (they're in the blocklist); here we add the
+    # fresh ones (matching the current audio), NOT subject to the blocklist. They land in TRAIN
+    # (split.get -> "train") since none of the quarantined sessions are in the frozen dev/test.
+    if args.reseg_dir and (pathlib.Path(args.reseg_dir) / "segments").exists():
+        rd = pathlib.Path(args.reseg_dir)
+        path, txt, segs = parse_dir(rd)
+        reseg_recs = set(path)
+        all_segs = [s for s in all_segs if s[1] not in reseg_recs]   # drop any base leftovers
+        for rec, p in path.items():
+            rec_path[rec] = p                                        # override base path (same audio)
+        text.update(txt)
+        all_segs.extend(segs)                                        # fresh segments, not stale-filtered
+        n_holdout = sum(1 for r in reseg_recs if split.get(r) in ("dev", "test"))
+        print(f"  reseg {rd.name}: {len(reseg_recs):,} recovered sessions, {len(segs):,} fresh "
+              f"segments (override blocklist)"
+              + (f"  !! {n_holdout} are in dev/test — will NOT go to train" if n_holdout else ""))
+    elif args.reseg_dir:
+        print(f"  [warn] --reseg-dir {args.reseg_dir} has no segments/ — ignored")
 
     # parallel header-probe -> seekable file-source recordings (resampled to 16k)
     print(f"probing {len(rec_path):,} file headers with {args.jobs} workers…")
