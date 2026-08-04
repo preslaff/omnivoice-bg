@@ -127,6 +127,36 @@ conversational/spontaneous axis. ~30 GB m4a; multi-day download at ~1 MB/s; resu
 ./venv/bin/python bnr_pseudolabel.py --stage cuts       --workdir data/ytdr --out-name bg_cuts_ytdr
 ```
 
+## Fourth axis — Bloomberg TV Bulgaria (added 2026-08-04, CAPPED by design)
+
+`@bloombergtvbulgaria`: broadcast **business/finance news** — anchors, expert interviews,
+financial vocabulary no other axis covers. Captions AUTO (verified) → `--agree-subs` applies.
+Channel archive is enormous (full enumeration times out ⇒ thousands of uploads; newest 50 avg
+19.2 min ≈ 16 h), so the harvest is **deliberately capped**, not exhaustive:
+
+1. **Register balance** — uncapped, business news would dominate the corpus and bias the
+   transducer's internal LM priors toward financial phrasing; registers should stay within
+   ~0.5–2× of each other for a general-purpose model.
+2. **Diversity-per-hour decays** — a TV channel is a few recurring anchors in one studio; the
+   first ~150 h buys the register/acoustics/vocabulary, hour 2,000 is near-duplicate.
+3. **Pseudo-labeling is the binding cost** — every crawled hour costs Whisper GPU time
+   (~160 h ≈ a GPU-day; a full archive ≈ weeks) for mostly-duplicate content.
+
+Safety valves: train-time source **sampling weights** (lhotse mux) can rebalance regardless,
+and the resumable harvest extends with a higher `--limit` if evaluation shows the register is
+under-served. (`--limit` also caps the *enumeration* — needed for huge channels.)
+
+```bash
+# after the DnevenRed download completes (serialize on the ~1 MB/s link):
+./venv/bin/python yt_harvest.py \
+  --channel https://www.youtube.com/@bloombergtvbulgaria/videos \
+  --out-dir data/ytbb --limit 500        # newest ~500 eps ≈ ~160 h / ~10 GB
+# then the same pipeline:
+./venv/bin/python bnr_pseudolabel.py --stage segment    --manifest data/ytbb/yt_manifest.jsonl --workdir data/ytbb
+./venv/bin/python bnr_pseudolabel.py --stage transcribe --manifest data/ytbb/yt_manifest.jsonl --workdir data/ytbb --agree-subs
+./venv/bin/python bnr_pseudolabel.py --stage cuts       --workdir data/ytbb --out-name bg_cuts_ytbb
+```
+
 ## Pipeline commands (tooling complete 2026-08-04; crawl launched)
 
 All steps are **resumable** — after any interruption (power cut), re-run the same line; each
