@@ -41,7 +41,7 @@ The specialist↔generalist crossover (same sets, same `bg_verbalize` normalizer
 | Test set | BG Zipformer (ours) | Whisper large-v3 | winner |
 |---|---|---|---|
 | Parliament (our domain) | **5.29** | 15.37 | ours, ~2.9× |
-| FLEURS (read Wikipedia, Whisper's turf) | 20.65 | **11.70** | Whisper, ~1.8× |
+| FLEURS (read Wikipedia, Whisper's turf) | 20.35 | **11.97** | Whisper, ~1.7× |
 | Common Voice (crowdsourced read, proxy neutral) | 22.27 | **15.42** | Whisper, ~1.4× |
 
 **Each model wins its home turf, and the *shape* is the story.** Ours is a **specialist** — superb
@@ -58,32 +58,24 @@ caveat: ours via icefall, Whisper via `bg_verbalize`; both refs number-spelled, 
 
 ### Out-of-domain — FLEURS BG (read Wikipedia), 2026-08-04
 
-> ⚠️ **FLEURS numbers below (20.65 / 20.90, and Whisper 11.70) are UNDER RE-MEASUREMENT.** The
-> first `prep_fleurs_bg.py` keyed cut ids on the FLEURS `id` field, which is the *sentence* index
-> (repeats across speakers) — so 344 wavs were written for 658 cuts and 314 recordings were
-> double-counted while their second-speaker versions were dropped. Fixed to key on the unique
-> `path` (commit b96eb3a). Re-prep + re-decode pending; these rows will be replaced.
-
-Zero-adaptation eval on FLEURS `bg_bg` **test** (658 utts / 1.9 h / 14,404 ref words) —
-Bulgarian Wikipedia sentences read aloud: a different register + speaker pool, clean studio
-audio. Same epoch-30 / avg-5 model, same `bg_verbalize` normalizer.
+Zero-adaptation eval on FLEURS `bg_bg` **test** (658 unique recordings / 1.9 h) — Bulgarian
+Wikipedia sentences read aloud: a different register + speaker pool, clean studio audio. Same
+epoch-30 / avg-5 model, same `bg_verbalize` normalizer. (Corrected 2026-08-04 after a cut-id-
+collision fix, commit b96eb3a; biased vs clean differ ~0.3 pt — a weighting bias, not garbage.)
 
 | Set | Method | WER % |
 |---|---|---|
-| FLEURS OOD | greedy_search | **20.65** |
-| FLEURS OOD | modified_beam_search | 20.90 |
-| FLEURS — Whisper large-v3 (ref) | greedy | 11.70 |
+| FLEURS OOD | greedy_search | **20.35** |
+| FLEURS OOD | modified_beam_search | 20.44 |
+| FLEURS — Whisper large-v3 (ref) | greedy | 11.97 |
 
-FLEURS error breakdown (greedy): 2974 / 14,404 = 223 ins / 861 del / 1890 sub.
-
-**In-domain 5.29% → OOD ~20.7% (≈4× relative).** This is the *domain-specialization cost*, not
+**In-domain 5.29% → OOD ~20.4% (≈4× relative).** This is the *domain-specialization cost*, not
 a defect. FLEURS is clean audio, so the gap is purely register / vocabulary / speaker shift
 (spontaneous parliamentary speech + its lexicon vs. read encyclopedic Wikipedia), not noise:
-- The model **generalizes** — ~20.7% on a wholly unseen domain/speakers means it learned real
-  Bulgarian ASR, not memorized parliament (a memorizer would be far worse). Deletions + subs
-  dominate (861 del / 1890 sub) = out-of-vocabulary encyclopedic terms and names — the expected
-  OOD failure mode.
-- **Beam ≤ greedy here** (20.90 vs 20.65), the reverse of in-domain: on OOD input the model's
+- The model **generalizes** — ~20.4% on a wholly unseen domain/speakers means it learned real
+  Bulgarian ASR, not memorized parliament (a memorizer would be far worse). Deletions + substitutions
+  dominate = out-of-vocabulary encyclopedic terms and names — the expected OOD failure mode.
+- **Beam ≥ greedy here** (20.44 vs 20.35), the reverse of in-domain: on OOD input the model's
   internal prior is domain-mismatched, so a wider search doesn't help. The parliament-trained
   KenLM/LG is likewise domain-biased and would not be expected to help FLEURS, so **greedy is
   the clean acoustic-generalization number**.
@@ -118,7 +110,7 @@ streaming (a `--causal 1` variant would be a separate run).
 - **Reference-transcript ceiling.** References are stenographic + Kaldi-aligned; some
   residual WER is reference noise, not model error.
 - **Domain matters (measured).** In-domain parliament = 5.29%; out-of-domain read Wikipedia
-  (FLEURS) = ~20.7% (§ Out-of-domain above). Conversational / dialectal / noisy audio is still
+  (FLEURS) = ~20.4% (§ Out-of-domain above). Conversational / dialectal / noisy audio is still
   unmeasured and would likely differ again.
 
 ## Reproducibility
