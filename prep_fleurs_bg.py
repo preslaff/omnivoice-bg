@@ -78,6 +78,8 @@ def main():
     ap.add_argument("--split", default="test")
     ap.add_argument("--cache-dir", default="data/fleurs_bg")
     ap.add_argument("--out-dir", default="data/fbank")
+    ap.add_argument("--out-name", default="bg_cuts_fleurs",
+                    help="manifest basename (feats dir mirrors it: bg_cuts_* -> bg_feats_*)")
     ap.add_argument("--num-mel-bins", type=int, default=80)
     ap.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 4))
     ap.add_argument("--limit", type=int, default=0, help="only first N examples (smoke)")
@@ -90,7 +92,7 @@ def main():
     from bg_text_norm import normalize
 
     dst = pathlib.Path(args.out_dir); dst.mkdir(parents=True, exist_ok=True)
-    manifest = dst / "bg_cuts_fleurs.jsonl.gz"
+    manifest = dst / f"{args.out_name}.jsonl.gz"
     if manifest.exists():
         print(f"[skip] {manifest} exists — delete to rebuild"); return
     cache = pathlib.Path(args.cache_dir); cache.mkdir(parents=True, exist_ok=True)
@@ -148,7 +150,7 @@ def main():
     cs = CutSet.from_cuts(cuts).resample(16000)
     print(f"extracting {args.num_mel_bins}-dim fbank with {args.jobs} workers -> {manifest.name}")
     cs = cs.compute_and_store_features(
-        extractor=extractor, storage_path=str(dst / "bg_feats_fleurs"),
+        extractor=extractor, storage_path=str(dst / args.out_name.replace("bg_cuts_", "bg_feats_")),
         num_jobs=args.jobs, storage_type=LilcomChunkyWriter)
     cs.to_file(manifest)
     hrs = sum(c.duration for c in cs) / 3600
