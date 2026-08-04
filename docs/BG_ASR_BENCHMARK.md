@@ -31,6 +31,24 @@ Frozen whole-session split (`data/lhotse/bg/split/`) — zero train↔dev↔test
 Test error breakdown (best system, 123,605 words): **6543 errors = 1487 ins / 2018 del /
 3038 sub**.
 
+### External comparison — Whisper large-v3 (zero-shot), 2026-08-04
+
+Off-the-shelf Whisper large-v3 on the **same** frozen parliament test set, scored through the
+**same** `bg_verbalize` normalizer (`eval_whisper_bg.py --model models/faster-whisper-large-v3`):
+
+| System | Parliament test WER % |
+|---|---|
+| **BG Zipformer (ours, LG @0.2)** | **5.29** |
+| Whisper large-v3 (zero-shot) | 15.37 |
+
+Whisper breakdown: 10,354 sub / 3,654 del / 5,035 ins over 123,874 words. **The specialist
+wins in-domain by ~2.9×** — Whisper is a generalist that never specialized on Bulgarian
+parliament. Minor caveat: our 5.29% was scored by icefall's native scorer and Whisper's 15.37%
+through `bg_verbalize`; both references are already number-spelled, so the two paths differ only
+marginally (a re-score of our recogs through `bg_verbalize` would move 5.29% by << the 10-point
+gap). Expect the reverse on Whisper's home turf (clean read speech) — a **neutral both-OOD test**
+(see [BG_ASR_ROADMAP.md](BG_ASR_ROADMAP.md)) would compare them on equal footing.
+
 ### Out-of-domain — FLEURS BG (read Wikipedia), 2026-08-04
 
 Zero-adaptation eval on FLEURS `bg_bg` **test** (658 utts / 1.9 h / 14,404 ref words) —
