@@ -119,7 +119,10 @@ def main():
                     dropped += 1
                     continue
                 arr, sr = sf.read(io.BytesIO(b)) if b is not None else sf.read(apath)
-                cid = f"fleurs_{args.config}_{ex.get('id', n)}"
+                # FLEURS 'id' is the SENTENCE index (repeats across speakers) — use the
+                # per-recording 'path' (unique) so cut ids / wav names don't collide.
+                stem = pathlib.Path(ex.get("path") or f"idx{n}").stem
+                cid = f"fleurs_{args.config}_{stem}"
                 wav = adir / f"{cid}.wav"
                 if not wav.exists():
                     sf.write(str(wav), arr, sr)             # seekable 16 kHz mono source
