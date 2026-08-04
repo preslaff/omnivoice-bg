@@ -168,6 +168,7 @@ def stage_transcribe(args):
                     segs = list(segs)
                     text = " ".join(sg.text for sg in segs).strip()
                     verdict, why = "accept", ""
+                    alp = None
                     if info.language != "bg" or (info.language_probability or 0) < args.lang_prob:
                         verdict, why = "reject", f"lang={info.language}:{info.language_probability:.2f}"
                     elif not segs or not text:
@@ -195,7 +196,8 @@ def stage_transcribe(args):
                             else:
                                 why = f"agree={d:.2f}"
                     utts.append({"t0": round(t, 2), "t1": round(t2, 2), "text": text,
-                                 "verdict": verdict, "why": why})
+                                 "verdict": verdict, "why": why,
+                                 "alp": None if alp is None else round(alp, 3)})
                     t = t2
             n_ok = sum(u["verdict"] == "accept" for u in utts)
             out.write(json.dumps({"audio_id": r["audio_id"], "path": r["path"],
