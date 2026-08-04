@@ -34,9 +34,15 @@ except ImportError:
     raise SystemExit("yt-dlp not installed. Run:  ./venv/bin/python -m pip install yt-dlp")
 
 
-def enumerate_videos(channel_url):
-    """flat playlist -> [{'id','title','duration'}, ...] (no downloads)."""
+def enumerate_videos(channel_url, playlistend=None):
+    """flat playlist -> [{'id','title','duration'}, ...] (no downloads).
+
+    playlistend caps the ENUMERATION itself (newest-first) — essential for huge channels
+    (e.g. TV stations with thousands of uploads) where a full listing takes minutes/hangs.
+    """
     opts = {"quiet": True, "extract_flat": True, "skip_download": True}
+    if playlistend:
+        opts["playlistend"] = playlistend
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(channel_url, download=False)
     entries = info.get("entries") or []
@@ -73,8 +79,11 @@ def main():
     print(f"resuming: {len(done):,} videos already in manifest")
 
     print(f"enumerating {args.channel} …", flush=True)
-    vids = enumerate_videos(args.channel)
-    print(f"  {len(vids):,} videos on the channel")
+    # cap the enumeration itself for huge channels: newest limit + headroom for already-done
+    # + short-skips. Without --limit we still list everything (fine for normal channels).
+    enum_cap = (args.limit * 2 + len(done)) if args.limit else None
+    vids = enumerate_videos(args.channel, playlistend=enum_cap)
+    print(f"  {len(vids):,} videos enumerated" + (f" (newest {enum_cap} only)" if enum_cap else ""))
     todo = [v for v in vids if v["id"] not in done]
     if args.limit:
         todo = todo[: args.limit]
