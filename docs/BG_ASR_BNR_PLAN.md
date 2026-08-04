@@ -102,6 +102,31 @@ cherry-picking clean solo-narration segments with verified transcripts.
 6. Evaluate on frozen parliament test + held-out FLEURS/CV test + a **fresh unseen set** (the true
    OOD probe — BNR held-out slice or self-recorded).
 
+## YouTube conversational axis — @DnevenRed (added 2026-08-04)
+
+Second harvest source through the SAME pipeline: `yt_harvest.py` pulls a channel's audio +
+Bulgarian **auto**-captions (default `@DnevenRed`, publicistic talk/interviews). Scale checked:
+**353 videos ≈ 552 h** — nearly the size of the entire v1 corpus, on the missing
+conversational/spontaneous axis. ~30 GB m4a; multi-day download at ~1 MB/s; resumable.
+
+- **Captions are YouTube auto-ASR** (`kind=asr`, verified — „автоматично генерирано“), NOT gold.
+  They are harvested as a **second teacher**: the pseudo-label pipeline's `--agree-subs` mode
+  keeps only spans where Whisper and the YT caption **agree** (independent ASR errors rarely
+  coincide → higher-precision labels than confidence alone). Disagreeing spans are dropped.
+- Same TOS/gray-zone call as BNR (YouTube TOS prohibits downloading; research practice; do not
+  redistribute).
+- Combined trajectory: v1 649 h + parliament recovery ~257 h + BNR ~300 h + YT ~552 h + FLEURS/CV
+  → **~1,700+ h**, past the ~1,800 h in-domain saturation scale of the Finnish reference.
+
+```bash
+./venv/bin/python yt_harvest.py --limit 3     # smoke
+./venv/bin/python yt_harvest.py               # full channel (resumable, per-video progress)
+# then the same pseudo-label stages with the YT manifest + two-teacher agreement:
+./venv/bin/python bnr_pseudolabel.py --stage segment    --manifest data/ytdr/yt_manifest.jsonl --workdir data/ytdr
+./venv/bin/python bnr_pseudolabel.py --stage transcribe --manifest data/ytdr/yt_manifest.jsonl --workdir data/ytdr --agree-subs
+./venv/bin/python bnr_pseudolabel.py --stage cuts       --workdir data/ytdr --out-name bg_cuts_ytdr
+```
+
 ## Pipeline commands (tooling complete 2026-08-04; crawl launched)
 
 All steps are **resumable** — after any interruption (power cut), re-run the same line; each
