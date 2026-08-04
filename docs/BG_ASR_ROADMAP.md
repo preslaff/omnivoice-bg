@@ -4,6 +4,15 @@
 ([BG_ASR_BENCHMARK.md](BG_ASR_BENCHMARK.md)). This file is the ordered index of what comes
 next; each phase links to its detailed plan.
 
+## Direction — GENERAL-PURPOSE (decided 2026-08-04)
+
+Target is **general-purpose Bulgarian ASR**, not a parliament-only tool. The 3-domain benchmark
+showed v1 is a **specialist** (5.29 in-domain, ~20–22% OOD) vs Whisper the **generalist** (flat
+~11–15%). Closing that gap needs **data diversity**, not more of the same register — 397 h of
+audiobook is already in training yet OOD stayed ~20–22%. So the primary next phase is a
+**diversified corpus** folding FLEURS + Common Voice into TRAINING (phase 2). Phases 0–1 (Whisper
+comparison + OOD eval) are **DONE** — results in the benchmark.
+
 ## Order of next actions
 
 ### 0. Whisper external comparison — *in progress*
@@ -29,12 +38,20 @@ v1 model on **non-parliament** Bulgarian audio to quantify robustness beyond the
 - **Deliverable:** an OOD WER row (FLEURS ± Common Voice) alongside the in-domain 5.29% →
   shows how far generalization holds off-domain (expect meaningfully higher; that gap is the point).
 
-### 2. V2 training with the re-segmented data
-Execute [BG_ASR_V2_PLAN.md](BG_ASR_V2_PLAN.md): recover the 110 quarantined sessions
-(+~257 h, **train only**) via `resegment_stale_sessions.sh` → `prep_lhotse_manifests.py
---reseg-dir` (to build) → self-clean in-bounds desync (decode the train set with the v1
-model, drop pathological-WER utts) → retrain → decode the **same frozen test** for a clean
-v1↔v2 delta. Frozen dev/test never change, so the comparison stays honest.
+### 2. V2 = diversified general-purpose corpus  ← PRIMARY
+Build a broader training set and retrain:
+- **Diversity (the scope lever):** add **FLEURS-train** + **Common Voice train/validated** (bg)
+  to training — new speakers, mics, registers audiobooks/parliament lack. Reuse
+  `prep_fleurs_bg.py` / `prep_commonvoice_bg.py` on the *train* splits.
+- **Parliament recovery (deepen in-domain):** [BG_ASR_V2_PLAN.md](BG_ASR_V2_PLAN.md) — recover
+  the 110 quarantined sessions (+~257 h) via `resegment_stale_sessions.sh` →
+  `prep_lhotse_manifests.py --reseg-dir` → self-clean in-bounds desync → retrain.
+- **Splitting discipline:** train on the FLEURS/CV **train** splits; keep their **test** splits
+  held out (no utterance leakage) + the frozen parliament dev/test. **Caveat:** once FLEURS/CV
+  are in training they are no longer *OOD* — the v1 numbers (FLEURS 20.65 / CV 22.27) are the
+  **pre-diversification baseline to beat**, and a truly-OOD measure for the general model needs a
+  **new unseen domain** (self-recorded set — see phase 1). **Target:** pull the ~20% OOD toward
+  Whisper's ~15% while keeping parliament strong.
 
 ### 3. Streaming model (`--causal 1`)
 Re-train the Zipformer as a **streaming** (chunk-wise, causal) model for real-time / on-device
