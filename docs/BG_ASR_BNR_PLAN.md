@@ -102,6 +102,37 @@ cherry-picking clean solo-narration segments with verified transcripts.
 6. Evaluate on frozen parliament test + held-out FLEURS/CV test + a **fresh unseen set** (the true
    OOD probe — BNR held-out slice or self-recorded).
 
+## Pipeline commands (tooling complete 2026-08-04; crawl launched)
+
+All steps are **resumable** — after any interruption (power cut), re-run the same line; each
+stage skips work already recorded in its output file.
+
+```bash
+cd ~/WORK/OmniVoice
+
+# 1. CRAWL (running since 2026-08-04) — ~1,126 posts, ~300h+/~17GB, several hours.
+#    Prints one line per segment + per-post summary with ETA. Resume = same line.
+./venv/bin/python bnr_crawl.py
+#    variants:  --category vremena-i-hora   (one section)    --delay 1.5   (gentler)
+# -> data/bnr/audio/<Id>.mp3  +  data/bnr/bnr_manifest.jsonl (metadata per segment)
+
+# 2. one-time install for stage 1 (TensorFlow; CPU is fine):
+./venv/bin/python -m pip install inaSpeechSegmenter
+
+# 3. PSEUDO-LABEL — three stages, run as separate invocations (TF vs torch).
+#    Each is resumable; use --limit N to process in batches.
+./venv/bin/python bnr_pseudolabel.py --stage segment      # speech/music quarantine (CPU)
+./venv/bin/python bnr_pseudolabel.py --stage transcribe   # Whisper large-v3 + faithfulness filter (GPU, the long one)
+./venv/bin/python bnr_pseudolabel.py --stage cuts         # accepted labels -> fbank cuts
+# -> data/bnr/segments.jsonl -> data/bnr/pseudolabels.jsonl -> data/fbank/bg_cuts_bnr.jsonl.gz
+#    filter thresholds (conservative, tune after calibration):
+#    --lang-prob 0.8 --min-logprob -0.7 --max-nospeech 0.5 --max-compression 2.4
+
+# 4. FOLD INTO TRAINING (hold out a BNR slice first if BNR should also be an eval domain):
+./venv/bin/python merge_train_corpus.py --train data/fbank/bg_cuts_bnr.jsonl.gz \
+    ... (other --train sources) --holdout ... --out data/fbank/bg_cuts_train_gp.jsonl.gz
+```
+
 ## Open questions
 - Total scale (hours) — **preliminary ~300 h** (1,126 posts × ~5.2 audio segs × ~3.0 min,
   from an 8-post sample via `bnr_scale_check.py`; run `--sample 60` to tighten). On par with AB400

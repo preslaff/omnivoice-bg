@@ -63,13 +63,62 @@ mismatch is repaired. CPU-only; aligner models read-only; v1 dirs untouched. Out
 `exp/kaldi_pilot/data/parl_restale_cleaned` (segments/text/wav.scp, lhotse-importable).
 
 Integration (train-only — the frozen dev/test contains **none** of these sessions, so
-v1↔v2 stay comparable):
-- add **`--reseg-dir`** to `prep_lhotse_manifests.py` (TO BUILD): for a recovered
-  recording, use the new `parl_restale_cleaned` segments and **ignore the old stale ones**
-  (they share the audio file, differ only in segments). Still-broken sessions stay excluded
-  via the blocklist.
-- `compute_fbank_bg.py --splits train` (dev/test fbank frozen), then retrain v2 from
-  scratch, decode the **same** frozen test set.
+v1↔v2 stay comparable). `prep_lhotse_manifests.py --reseg-dir` is BUILT (commit 578c1a1).
+
+#### Commands
+
+**Scenario 1 — the long run (fresh, CPU-only, ~overnight scale; seg is memory-bound at
+`seg_nj=8`).** Safe to run alongside the BNR crawl (network-bound) — but NOT alongside
+GPU training's dataloader:
+
+```bash
+cd ~/WORK/OmniVoice
+KALDI_ROOT=~/kaldi bash resegment_stale_sessions.sh
+# stages: 0 prep (long-utt dir + MFCC of the 110 sessions) -> 1 segment (biased-LM decode,
+# the long stage) -> 2 align_fmllr + clean_and_segment -> data/parl_restale_cleaned
+```
+
+**Scenario 2 — resume after an interruption (power cut etc.).** Restart at the highest
+completed stage instead of redoing prep/MFCC:
+
+```bash
+# if it died during stage 0 (prep/MFCC):        just re-run the full line (stage 0 re-runs)
+KALDI_ROOT=~/kaldi bash resegment_stale_sessions.sh
+# if stage 0 finished (data/parl_restale has feats.scp) but segmentation didn't complete:
+KALDI_ROOT=~/kaldi stage=1 bash resegment_stale_sessions.sh
+# if segmentation finished (data/parl_restale_seg/{feats.scp,segments} exist — stage 1 also
+# auto-skips itself in that case) and only align/clean remain:
+KALDI_ROOT=~/kaldi stage=2 bash resegment_stale_sessions.sh
+```
+Note: stage 1 (`segment_long_utterances`) is NOT internally resumable — if it dies mid-way,
+`stage=1` re-runs it from the start (the `_seg` completeness check only passes when it
+finished). Worst-case loss on a cut = the in-progress stage.
+
+**Downstream — delta integration (recommended; reuses the v1 649 h fbank, ~3 h instead of
+re-extracting ~906 h):** build a recovery-only manifest in fresh dirs, then merge:
+
+```bash
+# recovery-only lhotse manifests (recovered recs are not in the frozen split -> train bucket):
+./venv/bin/python prep_lhotse_manifests.py \
+    --dirs exp/kaldi_pilot/data/parl_restale_cleaned \
+    --exclude /dev/null --out data/lhotse/bg_reseg
+
+# fbank for JUST the +~257h (chunked/resumable), into a separate out-dir (no clobber of v1):
+./venv/bin/python compute_fbank_bg.py --in-dir data/lhotse/bg_reseg \
+    --out-dir data/fbank_reseg --splits train
+
+# fold into the general-purpose corpus (leakage guard drops anything held out):
+./venv/bin/python merge_train_corpus.py \
+    --train data/fbank/bg_cuts_train.jsonl.gz \
+    --train data/fbank_reseg/bg_cuts_train.jsonl.gz \
+    --train data/fbank/bg_cuts_fleurs_train.jsonl.gz \
+    --train data/fbank/bg_cuts_cv_train.jsonl.gz \
+    --holdout data/fbank/bg_cuts_dev.jsonl.gz --holdout data/fbank/bg_cuts_test.jsonl.gz \
+    --holdout data/fbank/bg_cuts_fleurs.jsonl.gz --holdout data/fbank/bg_cuts_cv.jsonl.gz \
+    --out data/fbank/bg_cuts_train_gp.jsonl.gz
+```
+(Alternative — full re-integration via `prep_lhotse_manifests.py --reseg-dir …` + a complete
+fbank re-extraction — re-does the 649 h for no gain; use the delta path.)
 
 ### B. Accentor closure — re-harvest + `--diff-old`
 
