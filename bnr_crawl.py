@@ -87,33 +87,40 @@ def main():
     print(f"{len(posts):,} posts to crawl\n")
 
     mf = manifest.open("a", encoding="utf-8")
-    seen = new = fail = 0
+    seen = new = fail = skipped = 0
     nbytes = 0
+    t0 = time.time()
     for pi, url in enumerate(posts, 1):
         m = PID_RE.search(url)
         pid = m.group(1) if m else ""
+        slug = url.rstrip("/").rsplit("/", 1)[-1][:44]
         try:
             d = post_data(fetch_text(url))
         except Exception as e:
-            print(f"  [warn] post {pid}: {e}")
+            print(f"[{pi}/{len(posts)}] post {pid} FETCH-FAIL: {e}", flush=True)
             time.sleep(args.delay)
             continue
         time.sleep(args.delay)
         if not d:
+            print(f"[{pi}/{len(posts)}] post {pid} {slug}: no data", flush=True)
             continue
         cat = (((d.get("ProgramOwner") or {}).get("Category") or {}).get("UrlName") or "")
         if args.category and cat != args.category:
             continue
         title = d.get("Title") or ""
-        for s in (d.get("Sections") or []):
-            a = s.get("Audio")
-            if not a or not a.get("Id"):
-                continue
+        segs = [s["Audio"] for s in (d.get("Sections") or [])
+                if s.get("Audio") and s["Audio"].get("Id")]
+        p_new = p_skip = 0
+        for si, a in enumerate(segs, 1):
             mid = a["Id"]
             seen += 1
             dst = adir / f"{mid}.mp3"
             if mid in done and dst.exists():
+                skipped += 1
+                p_skip += 1
                 continue
+            print(f"    seg {si}/{len(segs)} {a.get('FileName') or mid} …",
+                  end="", flush=True)
             sz = None
             for attempt in range(args.retries):
                 try:
@@ -121,11 +128,12 @@ def main():
                     break
                 except Exception as e:
                     if attempt == args.retries - 1:
-                        print(f"    [fail] {mid} (post {pid}): {e}")
+                        print(f" FAIL ({e})", flush=True)
                     time.sleep(args.delay * (attempt + 1))
             if sz is None:
                 fail += 1
                 continue
+            print(f" {sz/1e6:.1f} MB", flush=True)
             rec = {"audio_id": mid, "path": str(dst), "filename": a.get("FileName"),
                    "source": a.get("Source"), "description": a.get("Description"),
                    "post_id": pid, "post_title": title, "category": cat, "post_url": url}
@@ -133,11 +141,14 @@ def main():
             mf.flush()
             done.add(mid)
             new += 1
+            p_new += 1
             nbytes += sz
             time.sleep(args.delay)
-        if pi % 25 == 0:
-            print(f"  {pi}/{len(posts)} posts | {seen} segs seen, {new} new, "
-                  f"{nbytes/1e9:.1f} GB, {fail} failed")
+        el = time.time() - t0
+        eta_min = (el / pi) * (len(posts) - pi) / 60
+        print(f"[{pi}/{len(posts)}] {slug} ({cat}): {len(segs)} segs "
+              f"(+{p_new} new, {p_skip} cached) | total {new} dl / {nbytes/1e9:.2f} GB "
+              f"/ {fail} fail | ETA ~{eta_min:.0f} min", flush=True)
     mf.close()
     print(f"\nDONE: {seen} segments seen, {new} downloaded ({nbytes/1e9:.1f} GB), {fail} failed")
     print(f"  audio -> {adir}/    manifest -> {manifest}")
