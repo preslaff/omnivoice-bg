@@ -82,7 +82,9 @@ cherry-picking clean solo-narration segments with verified transcripts.
    OOD probe — BNR held-out slice or self-recorded).
 
 ## Open questions
-- Total scale (hours) — unknown until the scale-check crawl.
+- Total scale (hours) — **preliminary ~300 h** (1,126 posts × ~5.2 audio segs × ~3.0 min,
+  from an 8-post sample via `bnr_scale_check.py`; run `--sample 60` to tighten). On par with AB400
+  (397 h), a new axis. NOTE: `Source` field is often empty → filter Bulgarian by Whisper language-id.
 - Licensing posture (crawl-and-train vs. request permission).
 - Whisper faithfulness filter thresholds — needs a small vetted calibration set.
 
