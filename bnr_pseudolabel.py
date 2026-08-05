@@ -21,7 +21,11 @@ transcription is torch — keeping them in separate processes avoids GPU tussles
                       -> data/fbank/bg_cuts_bnr.jsonl.gz  (merge_train_corpus.py-ready)
 
     pip install inaSpeechSegmenter          # stage 1 (TensorFlow; CPU is fine)
-    ./venv/bin/python bnr_pseudolabel.py --stage segment    [--limit 20]
+    # STAGE-1 MEMORY LEAK (Keras predict-loop): the segmenter's RSS grows with every file —
+    # ~47GB after ~140 hour-long files (OOM-killed 2026-08-05). For LONG-file sources (YouTube
+    # episodes) run stage 1 in --limit 40 batches in a shell loop; each fresh process resets
+    # the leak. Short-file sources (BNR ~3min clips) survive a single run.
+    ./venv/bin/python bnr_pseudolabel.py --stage segment    [--limit 40, loop until done]
     ./venv/bin/python bnr_pseudolabel.py --stage transcribe [--limit 20]
     ./venv/bin/python bnr_pseudolabel.py --stage cuts
 
