@@ -94,6 +94,16 @@ Note: stage 1 (`segment_long_utterances`) is NOT internally resumable — if it 
 `stage=1` re-runs it from the start (the `_seg` completeness check only passes when it
 finished). Worst-case loss on a cut = the in-progress stage.
 
+**⚠️ REQUIRED FIRST — repair the broken FLAC containers (found 2026-08-05).** The 'stale'
+files are byte-concatenated multi-part FLACs whose STREAMINFO headers claim only part 1's
+length; Kaldi (sequential ffmpeg decode) aligned the FULL streams (334.4 h), but lhotse/
+soundfile seek by header and would silently address only part 1. Run BEFORE any lhotse prep:
+
+```bash
+./venv/bin/python repair_flac_headers.py --jobs 6     # lossless re-encode, verified vs Kaldi
+# broken originals kept in data/bg_parliament/audio_brokenheader/ until you delete them
+```
+
 **Downstream — delta integration (recommended; reuses the v1 649 h fbank, ~3 h instead of
 re-extracting ~906 h):** build a recovery-only manifest in fresh dirs, then merge:
 
