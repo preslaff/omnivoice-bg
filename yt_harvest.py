@@ -60,6 +60,11 @@ def main():
     ap.add_argument("--lang", default="bg", help="subtitle language to fetch (auto-subs)")
     ap.add_argument("--delay", type=float, default=2.0, help="seconds between videos")
     ap.add_argument("--limit", type=int, default=0, help="only first N videos (smoke)")
+    ap.add_argument("--cookies-from-browser", default=None, metavar="BROWSER",
+                    help="authenticate with your browser session (e.g. 'firefox' or 'chrome') "
+                         "to fetch members-only videos you have legitimate access to — e.g. "
+                         "DnevenRed's 76 members-only episodes (~184h). Resume picks up only "
+                         "the videos that become newly accessible. Never redistribute.")
     ap.add_argument("--min-duration", type=float, default=60.0,
                     help="skip clips shorter than this (shorts/teasers)")
     args = ap.parse_args()
@@ -98,6 +103,10 @@ def main():
         "subtitleslangs": [args.lang], "subtitlesformat": "vtt",
         "retries": 3, "ignoreerrors": True,
     }
+    if args.cookies_from_browser:
+        # yt-dlp expects a tuple (browser, profile, keyring, container); browser alone suffices
+        dl_opts["cookiesfrombrowser"] = (args.cookies_from_browser, None, None, None)
+        print(f"  using {args.cookies_from_browser} browser cookies (members-only accessible)")
     mf = manifest.open("a", encoding="utf-8")
     n_ok = n_skip = n_fail = 0
     nbytes = 0
