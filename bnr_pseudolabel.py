@@ -230,9 +230,11 @@ def stage_cuts(args):
     wdir = BNR / "wav16"
     wdir.mkdir(exist_ok=True)
 
-    cuts, n_rej = [], 0
-    for line in LABELS.open(encoding="utf-8"):
-        r = json.loads(line)
+    rows = [json.loads(l) for l in LABELS.open(encoding="utf-8")]
+    n_src = sum(1 for r in rows if r["n_accept"] > 0)
+    print(f"stage 3 cuts: decoding {n_src} source files to 16k wav (cached ones skipped)…", flush=True)
+    cuts, n_rej, n_done = [], 0, 0
+    for r in rows:
         acc = [u for u in r["utts"] if u["verdict"] == "accept"]
         n_rej += sum(1 for u in r["utts"] if u["verdict"] != "accept")
         if not acc:
@@ -245,6 +247,9 @@ def stage_cuts(args):
             if p.returncode != 0:
                 continue
         rec = Recording.from_file(wav, recording_id=r["audio_id"])
+        n_done += 1
+        if n_done % 100 == 0:
+            print(f"  {n_done}/{n_src} files ({len(cuts):,} cuts so far)", flush=True)
         for j, u in enumerate(acc):
             ref = normalize(u["text"])
             if not ref:
