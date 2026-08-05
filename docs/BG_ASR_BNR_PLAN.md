@@ -160,7 +160,7 @@ under-served. (`--limit` also caps the *enumeration* — needed for huge channel
   --out-dir data/ytbb --limit 500        # newest ~500 eps ≈ ~160 h / ~10 GB
 # then the same pipeline:
 ./venv/bin/python bnr_pseudolabel.py --stage segment    --manifest data/ytbb/yt_manifest.jsonl --workdir data/ytbb
-./venv/bin/python bnr_pseudolabel.py --stage transcribe --manifest data/ytbb/yt_manifest.jsonl --workdir data/ytbb --agree-subs
+./venv/bin/python bnr_pseudolabel.py --stage transcribe-batched --manifest data/ytbb/yt_manifest.jsonl --workdir data/ytbb --agree-subs   # ~2-4x faster
 ./venv/bin/python bnr_pseudolabel.py --stage cuts       --workdir data/ytbb --out-name bg_cuts_ytbb
 ```
 
@@ -177,7 +177,7 @@ as the top new-data need. 400+ episodes, median 87 min, AUTO captions (agree-sub
   --channel https://www.youtube.com/channel/UC4rydPOr1yMo4y33Md3ExFg/videos \
   --out-dir data/ytgi --limit 180
 # segment stage MUST use the batched loop (87-min files): --limit 30 per batch
-# then: transcribe --agree-subs --workdir data/ytgi ... ; cuts --out-name bg_cuts_ytgi
+# then: transcribe-batched --agree-subs --workdir data/ytgi ... ; cuts --out-name bg_cuts_ytgi
 ```
 
 ## Pipeline commands (tooling complete 2026-08-04; crawl launched)

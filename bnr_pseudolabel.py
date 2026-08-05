@@ -228,6 +228,127 @@ def stage_transcribe(args):
     print(f"-> {LABELS}")
 
 
+# ------------------------------------------------- stage 2b: transcribe-batched
+def stage_transcribe_batched(args):
+    """Batched variant of stage 2 (~2-4x): one BatchedInferencePipeline call per FILE with
+    our speech windows as clip_timestamps (seconds; each window <= 28s fits one chunk),
+    batch_size chunks decoded together. Same output schema / filters / resume as stage 2.
+    Differences: language is detected once per FILE (fine for modern single-language
+    sources; archival BNR should keep the sequential stage), and window metrics are
+    aggregated from the segments that fall inside each window."""
+    import time
+    from faster_whisper import WhisperModel, BatchedInferencePipeline
+    print(f"loading Whisper {args.model} (batched, batch_size={args.batch_size}) …", flush=True)
+    model = WhisperModel(args.model, device=args.device, compute_type="float16")
+    batched = BatchedInferencePipeline(model=model)
+    print("model ready; transcribing…", flush=True)
+    rows = [json.loads(l) for l in SEGMENTS.open(encoding="utf-8")]
+    done = _done_ids(LABELS, "audio_id")
+    todo = [r for r in rows if r["audio_id"] not in done and r["speech_regions"]]
+    if args.limit:
+        todo = todo[: args.limit]
+    print(f"stage 2b transcribe-batched: {len(rows)} segmented, {len(done)} done, "
+          f"{len(todo)} to do", flush=True)
+    import soundfile as sf
+    import io
+    if args.agree_subs:
+        from jiwer import wer as jiwer_wer
+        from bg_text_norm import normalize as _tn
+    t0_all = time.time()
+    tot_acc = tot_win = 0
+    with LABELS.open("a", encoding="utf-8") as out:
+        for i, r in enumerate(todo, 1):
+            # our windows (same construction as stage 2)
+            wins = []
+            for (s_, e_) in r["speech_regions"]:
+                t = s_
+                while t < e_ - 0.3:
+                    t2 = min(t + MAX_UTT_SEC, e_)
+                    wins.append((round(t, 2), round(t2, 2)))
+                    t = t2
+            print(f"[{i}/{len(todo)}] {r['audio_id']} ({r['speech_sec']/60:.0f} min speech, "
+                  f"{len(wins)} windows)…", flush=True)
+            t0_f = time.time()
+            cues = None
+            if args.agree_subs and r.get("subs") and pathlib.Path(r["subs"]).exists():
+                cues = parse_vtt(r["subs"])
+            p = subprocess.run(
+                ["ffmpeg", "-nostdin", "-v", "error", "-i", r["path"],
+                 "-ac", "1", "-ar", "16000", "-f", "wav", "-"],
+                capture_output=True)
+            if p.returncode != 0:
+                print(f"  [fail-decode] {r['audio_id']}", flush=True)
+                continue
+            audio, sr = sf.read(io.BytesIO(p.stdout), dtype="float32")
+            clips = [{"start": a, "end": b} for a, b in wins]
+            segs_it, info = batched.transcribe(
+                audio, language=None, beam_size=5, batch_size=args.batch_size,
+                clip_timestamps=clips, word_timestamps=False)
+            segs = list(segs_it)
+            # file-level language gate (modern single-language sources)
+            lang_bad = (info.language != "bg"
+                        or (info.language_probability or 0) < args.lang_prob)
+            # assign each segment to the window with MAX time-overlap (boundary-jittered
+            # segments otherwise migrate to the neighbor and poison both windows' text)
+            buckets = [[] for _ in wins]
+            wi = 0
+            for sg in segs:
+                while wi < len(wins) - 1 and sg.start >= wins[wi][1]:
+                    wi += 1
+                best, best_ov = wi, -1.0
+                for j in range(max(0, wi - 1), min(len(wins), wi + 2)):
+                    a, b = wins[j]
+                    ov = min(sg.end, b) - max(sg.start, a)
+                    if ov > best_ov:
+                        best, best_ov = j, ov
+                buckets[best].append(sg)
+            utts = []
+            for (a, b), bs in zip(wins, buckets):
+                text = " ".join(sg.text for sg in bs).strip()
+                verdict, why, alp = "accept", "", None
+                if lang_bad:
+                    verdict, why = "reject", (f"lang={info.language}:"
+                                              f"{info.language_probability:.2f}")
+                elif not bs or not text:
+                    verdict, why = "reject", "empty"
+                else:
+                    alp = sum(sg.avg_logprob for sg in bs) / len(bs)
+                    nsp = max((sg.no_speech_prob or 0) for sg in bs)
+                    cmp_ = max((sg.compression_ratio or 0) for sg in bs)
+                    if alp < args.min_logprob:
+                        verdict, why = "reject", f"logprob={alp:.2f}"
+                    elif nsp > args.max_nospeech:
+                        verdict, why = "reject", f"nospeech={nsp:.2f}"
+                    elif cmp_ > args.max_compression:
+                        verdict, why = "reject", f"compression={cmp_:.2f}"
+                if verdict == "accept" and cues is not None:
+                    cap = cues_text(cues, a, b)
+                    if cap:
+                        d = jiwer_wer(_tn(cap) or " ", _tn(text) or " ")
+                        if d > args.agree_wer:
+                            verdict, why = "reject", f"disagree={d:.2f}"
+                        else:
+                            why = f"agree={d:.2f}"
+                    elif b - a < 4.0:
+                        # no second teacher on a tiny window -> not worth the risk
+                        verdict, why = "reject", "nocap-short"
+                utts.append({"t0": a, "t1": b, "text": text, "verdict": verdict,
+                             "why": why, "alp": None if alp is None else round(alp, 3)})
+            n_ok = sum(u["verdict"] == "accept" for u in utts)
+            out.write(json.dumps({"audio_id": r["audio_id"], "path": r["path"],
+                                  "utts": utts, "n_accept": n_ok},
+                                 ensure_ascii=False) + "\n")
+            out.flush()
+            tot_acc += n_ok
+            tot_win += len(utts)
+            el = time.time() - t0_all
+            eta_h = (el / i) * (len(todo) - i) / 3600
+            print(f"  done in {(time.time()-t0_f)/60:.1f} min: {n_ok}/{len(utts)} accepted "
+                  f"| total {tot_acc}/{tot_win} ({100*tot_acc/max(tot_win,1):.0f}%) "
+                  f"| ETA ~{eta_h:.1f} h", flush=True)
+    print(f"-> {LABELS}")
+
+
 # ---------------------------------------------------------------- stage 3: cuts
 def stage_cuts(args):
     from lhotse import (CutSet, Fbank, FbankConfig, LilcomChunkyWriter, MonoCut,
@@ -299,7 +420,8 @@ def stage_cuts(args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--stage", required=True, choices=["segment", "transcribe", "cuts"])
+    ap.add_argument("--stage", required=True,
+                choices=["segment", "transcribe", "transcribe-batched", "cuts"])
     ap.add_argument("--manifest", default=None,
                     help="input manifest (default <workdir>/bnr_manifest.jsonl); accepts BNR "
                          "{audio_id,path} or yt_harvest {video_id,audio,subs} records")
@@ -311,6 +433,8 @@ def main():
                     help="two-teacher agreement: also require the platform caption (subs vtt) "
                          "to agree with Whisper (inter-teacher WER <= --agree-wer); windows "
                          "without caption overlap fall back to the confidence verdict")
+    ap.add_argument("--batch-size", type=int, default=16,
+                help="transcribe-batched: chunks decoded together (VRAM ~3-6GB at 16)")
     ap.add_argument("--agree-wer", type=float, default=0.5,
                     help="max Whisper<->caption WER to accept (both normalized); calibrate")
     ap.add_argument("--limit", type=int, default=0, help="files per run (smoke/batching)")
@@ -328,7 +452,8 @@ def main():
     SEGMENTS = BNR / "segments.jsonl"
     LABELS = BNR / "pseudolabels.jsonl"
     MANIFEST = pathlib.Path(args.manifest) if args.manifest else BNR / "bnr_manifest.jsonl"
-    {"segment": stage_segment, "transcribe": stage_transcribe, "cuts": stage_cuts}[args.stage](args)
+    {"segment": stage_segment, "transcribe": stage_transcribe,
+     "transcribe-batched": stage_transcribe_batched, "cuts": stage_cuts}[args.stage](args)
 
 
 if __name__ == "__main__":
