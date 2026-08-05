@@ -133,8 +133,11 @@ def stage_segment(args):
 
 # ---------------------------------------------------------------- stage 2: transcribe
 def stage_transcribe(args):
+    import time
     from faster_whisper import WhisperModel
+    print(f"loading Whisper {args.model} …", flush=True)
     model = WhisperModel(args.model, device=args.device, compute_type="float16")
+    print("model ready; transcribing…", flush=True)
     rows = [json.loads(l) for l in SEGMENTS.open(encoding="utf-8")]
     done = _done_ids(LABELS, "audio_id")
     todo = [r for r in rows if r["audio_id"] not in done and r["speech_regions"]]
@@ -146,8 +149,14 @@ def stage_transcribe(args):
     if args.agree_subs:
         from jiwer import wer as jiwer_wer
         from bg_text_norm import normalize as _tn
+    t0_all = time.time()
+    tot_acc = tot_win = 0
     with LABELS.open("a", encoding="utf-8") as out:
         for i, r in enumerate(todo, 1):
+            n_win_est = sum(max(1, int((e - s_) // MAX_UTT_SEC) + 1) for s_, e in r["speech_regions"])
+            print(f"[{i}/{len(todo)}] {r['audio_id']} ({r['speech_sec']/60:.0f} min speech, "
+                  f"~{n_win_est} windows)…", flush=True)
+            t0_f = time.time()
             cues = None
             if args.agree_subs and r.get("subs") and pathlib.Path(r["subs"]).exists():
                 cues = parse_vtt(r["subs"])
@@ -202,13 +211,20 @@ def stage_transcribe(args):
                     utts.append({"t0": round(t, 2), "t1": round(t2, 2), "text": text,
                                  "verdict": verdict, "why": why,
                                  "alp": None if alp is None else round(alp, 3)})
+                    if len(utts) % 25 == 0:
+                        print(f"    window {len(utts)}/~{n_win_est}, "
+                              f"{sum(u['verdict']=='accept' for u in utts)} accepted", flush=True)
                     t = t2
             n_ok = sum(u["verdict"] == "accept" for u in utts)
             out.write(json.dumps({"audio_id": r["audio_id"], "path": r["path"],
                                   "utts": utts, "n_accept": n_ok}, ensure_ascii=False) + "\n")
             out.flush()
-            if i % 5 == 0:
-                print(f"  {i}/{len(todo)}  (last file: {n_ok}/{len(utts)} accepted)")
+            tot_acc += n_ok; tot_win += len(utts)
+            el = time.time() - t0_all
+            eta_h = (el / i) * (len(todo) - i) / 3600
+            print(f"  done in {(time.time()-t0_f)/60:.1f} min: {n_ok}/{len(utts)} accepted "
+                  f"| total {tot_acc}/{tot_win} ({100*tot_acc/max(tot_win,1):.0f}%) "
+                  f"| ETA ~{eta_h:.1f} h", flush=True)
     print(f"-> {LABELS}")
 
 
@@ -269,6 +285,9 @@ def stage_cuts(args):
     extractor = Fbank(FbankConfig(num_mel_bins=80, sampling_rate=16000))
     cs = CutSet.from_cuts(cuts)
     jobs = 1 if len(cuts) < 50 else args.jobs      # tiny batches: skip multiprocessing overhead
+    print(f"fbank extraction with {jobs} workers — NOTE: the bar below advances once per "
+          f"WORKER (~{len(cuts)//max(jobs,1):,} cuts each, can be 15-25 min/tick); watch "
+          f"`du -sh` on the feats dir for continuous progress.", flush=True)
     cs = cs.compute_and_store_features(
         extractor=extractor, storage_path=str(out_dir / args.out_name.replace("bg_cuts_", "bg_feats_")),
         num_jobs=jobs, storage_type=LilcomChunkyWriter)
