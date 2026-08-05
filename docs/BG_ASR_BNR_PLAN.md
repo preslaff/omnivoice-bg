@@ -164,6 +164,22 @@ under-served. (`--limit` also caps the *enumeration* — needed for huge channel
 ./venv/bin/python bnr_pseudolabel.py --stage cuts       --workdir data/ytbb --out-name bg_cuts_ytbb
 ```
 
+## Fifth axis — «Говори интернет» podcasts (added 2026-08-05, casual conversational)
+
+`UC4rydPOr1yMo4y33Md3ExFg`: Bulgaria's leading podcast network — **casual, NON-political
+conversation** (food, travel, personal stories), the register the scarcity assessment flagged
+as the top new-data need. 400+ episodes, median 87 min, AUTO captions (agree-subs applies).
+**Capped `--limit 180`** (~260 h raw → ~200 h post-filter) so the conversational register
+(with DnevenRed) stays inside the 0.5–2× balance band.
+
+```bash
+./venv/bin/python yt_harvest.py \
+  --channel https://www.youtube.com/channel/UC4rydPOr1yMo4y33Md3ExFg/videos \
+  --out-dir data/ytgi --limit 180
+# segment stage MUST use the batched loop (87-min files): --limit 30 per batch
+# then: transcribe --agree-subs --workdir data/ytgi ... ; cuts --out-name bg_cuts_ytgi
+```
+
 ## Pipeline commands (tooling complete 2026-08-04; crawl launched)
 
 All steps are **resumable** — after any interruption (power cut), re-run the same line; each
