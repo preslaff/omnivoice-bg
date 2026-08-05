@@ -1,5 +1,12 @@
 # BNR archive harvest — plan (diverse audio for general-purpose ASR)
 
+> **✅ AXIS CLOSED 2026-08-05: `data/fbank/bg_cuts_bnr.jsonl.gz` = 34,425 cuts / 102.9 h.**
+> Funnel: 1,035 posts / 3,006 mp3s / ~220 h crawled → 126.7 h speech after the music
+> quarantine (58 %) → 87.8 h accepted by the faithfulness filter → +15.1 h recovered by
+> Zipformer arbitration (79 % of bg-lang rejects) → 102.9 h cut at 80-dim fbank/16 kHz.
+> Audited: 24.9 % inter-model disagreement on accepts (≈ single-digit label error), native
+> listening calibrated --lang-prob. Broken-header lesson lives in BG_ASR_V2_PLAN.
+
 **Status:** drafted 2026-08-04, exploratory. Feeds the **general-purpose** pivot
 ([BG_ASR_ROADMAP.md](BG_ASR_ROADMAP.md) phase 2 / [bg-asr-general-purpose-pivot memory]).
 Goal: harvest **domain-diverse Bulgarian audio** from the Bulgarian National Radio archives
