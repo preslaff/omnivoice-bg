@@ -53,7 +53,7 @@ recovered, 93.9 % cleanup retention) → recovery-only manifests (`data/lhotse/b
 5. **`cuts`** → `bg_cuts_bnr.jsonl.gz`. *Labels: Whisper weak supervision, confidence-filtered
    + partially two-teacher.*
 
-### D. YouTube — DnevenRed (368 h) & Bloomberg BG (149 h)
+### D. YouTube — DnevenRed (368 h), Bloomberg BG (149 h) & Говори интернет (capped 180 eps)
 `yt_harvest.py` (audio-only m4a + Bulgarian **auto**-caption vtt; `--min-duration 60` skips
 shorts; enumeration capped for huge channels; `--cookies-from-browser` ready for members-only
 top-up) → same `bnr_pseudolabel.py` stages with:
@@ -64,6 +64,9 @@ top-up) → same `bnr_pseudolabel.py` stages with:
   inter-teacher WER ≤ 0.5). Independent errors rarely coincide ⇒ higher precision than
   confidence alone. Captions are never treated as gold.
 *Labels: Whisper × YT-caption agreement (strongest weak-supervision tier).*
+Third channel (2026-08-05): **«Говори интернет»** podcasts (`data/ytgi`, `--limit 180` ≈
+~200 h post-filter) — casual NON-political conversation, the scarcity assessment's top
+new-data need; 87-min episodes ⇒ segment stage strictly in `--limit 30` batches.
 
 ### E. FLEURS + Common Voice (read speech, ~25 h train)
 Direct-parquet preps (`prep_fleurs_bg.py`, `prep_commonvoice_bg.py` — bypass datasets-5.0
@@ -128,6 +131,21 @@ alternatively be duplicated 2–3× at merge if mux is not wired into the datamo
 **Mechanism 4 — self-training round 2 (later).** Once GP-v2 beats Whisper on Bulgarian, it
 relabels the weak-supervised axes (C, D), replacing the weaker teacher and lifting label
 quality corpus-wide.
+
+## Acoustic augmentation (scarcity fix #1 — multi-condition training)
+
+The corpus is almost entirely **clean/studio** audio; real-world robustness (the CV-style
+condition where v1 was weakest) comes from train-time augmentation, not more clean data:
+
+- **MUSAN CutMix (GP-v2, ready):** `musan_prep.sh` downloads OpenSLR-17 (~11 GB — run when
+  the link is free), builds manifests, and computes 80-dim fbank →
+  `data/fbank/musan_cuts.jsonl.gz`. The datamodule already supports it — launch GP-v2 with
+  **`--enable-musan true`** (CutMix p=0.5, SNR 10–20 dB, feature-domain ⇒ precomputed feats
+  keep working). SpecAugment is already on.
+- **RIR reverb + telephony/codec simulation (GP-v3 option):** needs on-the-fly feature
+  extraction (audio-domain transforms), i.e. `--on-the-fly-feats` + OpenSLR-28 RIRS_NOISES
+  and an 8 kHz band-limit/µ-law chain on a subset. Deferred — costs training throughput;
+  revisit if GP-v2's noisy-condition eval still lags.
 
 ## Order of operations (the one-line version)
 
