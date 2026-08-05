@@ -98,7 +98,7 @@ def tier2_crosscheck(args, wd, acc):
                         Recording, SupervisionSegment)
     from bg_text_norm import normalize
     sample = random.sample(acc, min(args.make_crosscheck, len(acc)))
-    cdir = wd / "audit_crosscheck"
+    cdir = (wd / "audit_crosscheck").resolve()
     cdir.mkdir(exist_ok=True)
     cuts = []
     print(f"exporting {len(sample)} accepted windows for the Zipformer cross-check…")
