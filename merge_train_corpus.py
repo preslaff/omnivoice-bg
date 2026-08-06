@@ -42,6 +42,12 @@ def main():
     ap.add_argument("--split-dir", default="data/lhotse/bg/split",
                     help="also treat {dev,test}_recordings.txt here as held-out session ids")
     ap.add_argument("--out", default="data/fbank/bg_cuts_train_gp.jsonl.gz")
+    ap.add_argument("--no-shuffle", action="store_true",
+                    help="write in source order (default: GLOBAL seeded shuffle — a source-ordered "
+                         "manifest makes the sampler's windowed shuffle sweep registers in sequence "
+                         "each epoch, causing dev sawtooth + end-of-epoch recency bias; icefall's "
+                         "train-all-shuf convention. Lesson from GP-v2's 2026-08-06 false start.)")
+    ap.add_argument("--seed", type=int, default=20260806)
     ap.add_argument("--dry-run", action="store_true", help="report only; write nothing")
     args = ap.parse_args()
 
@@ -107,11 +113,20 @@ def main():
         print(f"\n[dry-run] would write {total:,} cuts -> {out} (nothing written)")
         return
     out.parent.mkdir(parents=True, exist_ok=True)
-    with CutSet.open_writer(out) as w:
-        total = 0
-        for c in kept_cuts():
-            w.write(c)
-            total += 1
+    if args.no_shuffle:
+        with CutSet.open_writer(out) as w:
+            total = 0
+            for c in kept_cuts():
+                w.write(c)
+                total += 1
+    else:
+        import random
+        random.seed(args.seed)
+        cuts = list(kept_cuts())                    # eager: global shuffle needs all in memory
+        random.shuffle(cuts)
+        CutSet.from_cuts(cuts).to_file(out)
+        total = len(cuts)
+        print(f"  globally shuffled (seed {args.seed})")
     hrs = sum(v[4] for v in main.stats.values()) / 3600
     print(f"\nmerged {total:,} cuts ({hrs:.1f} h) -> {out}")
     print("Next: train the Zipformer on this manifest (data.json --> bg_cuts_train_gp.jsonl.gz);")
