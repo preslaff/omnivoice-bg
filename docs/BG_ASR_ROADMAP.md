@@ -67,6 +67,20 @@ Change ONE variable at a time so effects stay attributable:
   is the server-side best model. Published M→L gains at ~1–2k h are ~5–10 % relative — worth
   having only after the data levers (balance/mux, broad LM, self-training round 2) are spent.
 
+### 2c. Whisper-BG fine-tune — second architecture (FUTURE WORK, after GP-v2)
+
+LoRA/PEFT fine-tune of **whisper-large-v3** on the GP corpus (full FT of 1.5B is infeasible on
+16 GB; LoRA fits, ~2–4 GPU-days, 1–2 epochs). Train on **raw punctuated** texts (stored in
+pseudolabels.jsonl + punctuated stenograms) to preserve Whisper's punctuation ability. Three
+payoffs, in value order:
+1. **Teacher upgrade** — relabel the weak axes (BNR/YT ~700 h) with the BG-FT Whisper =
+   self-training round 2 with a stronger teacher → better GP-v3 data.
+2. **Complementary deployment** — Zipformer wins covered registers/streaming/edge; Whisper-FT
+   likely wins the unseen tail; **agreement-mode jobs** (both decode; agree → auto, disagree →
+   human review) as a high-stakes product pattern (the labeling arbitration, productized).
+3. **Benchmark sparring partner** — an independent strong model keeps the eval honest.
+Sequencing: strictly after GP-v2 (same GPU; GP-v2 answers the diversity question first).
+
 ### 3. Streaming model (`--causal 1`)
 Re-train the Zipformer as a **streaming** (chunk-wise, causal) model for real-time / on-device
 use. Reuses the same fbank + BPE + (v2) corpus; costs ~1–2 % abs WER vs offline but enables
