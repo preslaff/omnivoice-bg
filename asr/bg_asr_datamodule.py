@@ -146,6 +146,13 @@ class BgParliamentAsrDataModule:
             "if available.",
         )
         group.add_argument(
+            "--train-manifest",
+            type=str,
+            default="bg_cuts_train.jsonl.gz",
+            help="train cuts manifest basename under --manifest-dir (GP-v2: "
+                 "bg_cuts_train_gp.jsonl.gz; default = the v1 manifest).",
+        )
+        group.add_argument(
             "--shuffle",
             type=str2bool,
             default=True,
@@ -368,7 +375,7 @@ class BgParliamentAsrDataModule:
     @lru_cache()
     def train_all_shuf_cuts(self) -> CutSet:
         logging.info("About to get BG train cuts")
-        return load_manifest_lazy(self.args.manifest_dir / "bg_cuts_train.jsonl.gz")
+        return load_manifest_lazy(self.args.manifest_dir / self.args.train_manifest)
 
     @lru_cache()
     def dev_clean_cuts(self) -> CutSet:

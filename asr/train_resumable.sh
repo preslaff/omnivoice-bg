@@ -19,6 +19,8 @@ EXP="${EXP:-zipformer/exp}"
 NUM_EPOCHS="${NUM_EPOCHS:-30}"
 MAX_DUR="${MAX_DUR:-350}"
 PY="${PY:-$HOME/WORK/OmniVoice/venv/bin/python}"
+ENABLE_MUSAN="${ENABLE_MUSAN:-false}"        # GP-v2: true (needs data/fbank/musan_cuts.jsonl.gz)
+TRAIN_MANIFEST="${TRAIN_MANIFEST:-bg_cuts_train.jsonl.gz}"   # GP-v2: bg_cuts_train_gp.jsonl.gz
 
 cd "$REC"
 export PYTHONPATH="$ICEFALL:${PYTHONPATH:-}"
@@ -37,7 +39,8 @@ while true; do
     --use-fp16 1 --causal 0 \
     --exp-dir "$EXP" \
     --bpe-model data/lang_bpe_500/bpe.model \
-    --max-duration "$MAX_DUR" --num-workers 2 --save-every-n 2000
+    --max-duration "$MAX_DUR" --num-workers 2 --save-every-n 2000 \
+    --enable-musan "$ENABLE_MUSAN" --train-manifest "$TRAIN_MANIFEST"
   code=$?
   if [ "$code" -eq 0 ]; then
     echo "[resumable] train.py finished cleanly."
