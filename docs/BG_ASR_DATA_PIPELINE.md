@@ -84,7 +84,13 @@ pre-diversification OOD baselines: 20.35 / 22.27 to beat).
 | Language-id + confidence + compression | C, D | foreign speech, mishearings, hallucination loops |
 | Caption agreement (`--agree-subs`) | D | any single-teacher error |
 | Zipformer arbitration (`zwer ≤ 0.5`) | C recovery | degraded-audio false rejects/accepts |
-| 3-tier audit (stats / cross-decode / listening) | C (template for D) | threshold calibration, systematic label error |
+| 3-tier audit (stats / cross-decode / listening) | C, D | threshold calibration, systematic label error |
+
+Audit outcomes (2026-08-06): BNR crosscheck 24.9 % inter-model disagreement (≈ single-digit
+label error). YT tier-1 reports healthy on all three axes (accept 71/82/75 %, hallucination
+≤ 0.2 %, batched axes ~0 lang false-rejects). **Native listening on the batched axes
+(ytbb + ytgi, stratified 24-clip sheets): "nearly perfect"** — the batched+agreement method
+is ears-validated at scale.
 | Merge leakage guard + dedup | all | eval contamination, double-counting |
 
 ## Data balancing
