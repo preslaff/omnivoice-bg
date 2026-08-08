@@ -61,27 +61,32 @@ press record — allow it.
 nickname is remembered in `localStorage`, so a reload skips straight back to the app. Use
 **different nicknames** across runs if you want to see different eval/train split assignments.
 
-**Two modes**, switched by the buttons at the top:
+**Two modes**, switched by the buttons at the top. Both show the model's output *first*, then
+ask what you actually said — typing is what kills completion, especially on a phone.
 
 | | Прочети фраза (read) | Говори свободно (free) |
 |---|---|---|
 | You do | Read the yellow phrase aloud | Say anything |
-| The text box | Prefilled with **the prompt** | Starts **empty** — you type what you said |
-| Reference | The prompt | What you typed |
-
-In read mode the box is prefilled with the *prompt*, never with the model's guess — that is
-deliberate. Only correct it if you actually misread. In free mode nothing is prefilled, and
-you should type before pressing *Покажи какво чу моделът*, because `typed_before_reveal` is
-what makes a row eligible for the eval set.
+| Step 2 shows | The model's output **diffed against the prompt** | The model's output, plain |
+| Step 3 box | Prefilled with **the prompt** | Empty, with a green **copy** button |
+| Typing needed | **None** — just press Изпрати | None if the model got it right |
+| Reference is | The prompt | Your text (a post-edit of the model's) |
 
 **Record.** Press *● Запиши*, speak, press *■ Спри*. The counter hard-stops at 15 s on its own.
-Transcription starts automatically and takes well under a second on this machine; the result
-appears next to the button as `Готово · NN мс`.
+Transcription starts automatically; the result appears as `Готово · NN мс`, and the model's
+text appears immediately below it — red = substitution, orange = the model dropped a word,
+green = the model invented one.
 
-**Reveal and submit.** *Покажи какво чу моделът* shows the model's output diffed against your
-text: <span>red = substitution, orange = the model dropped a word, green = the model invented
-one</span>. Then *Изпрати*. The diff also appears automatically after submitting if you didn't
-reveal first.
+**Answer and submit.** In read mode the box already holds the prompt: press *Изпрати* unless
+you misread. In free mode, if the model got you exactly right press the green
+*✓ Моделът разпозна вярно — копирай текста*; otherwise copy and fix just the wrong words, or
+type from scratch. Then *Изпрати*.
+
+**Why the asymmetry matters.** Read mode's reference is the prompt, which existed *before* the
+model ran — so no ordering can bias it, and it is the least work of all. That is where the
+frozen eval set comes from. Free-mode text is a post-edit of the model's output and is training
+data. The server records which of `prompt / edited_prompt / typed / copied / edited_copy`
+produced each row and sets `eval_eligible` accordingly — see §5.
 
 **Next.** *Следващ запис* clears everything and (in read mode) fetches a new prompt.
 
@@ -109,9 +114,26 @@ Fields to look at:
 - `mode` — `read` or `free`.
 - `human_text` vs `asr_hyp` — your text vs the model's. **Both are always kept**; `asr_hyp` is
   never overwritten by your edit.
+- `human_text_source` — **the field that decides what may enter a benchmark**, recomputed
+  server-side and never trusted from the form:
+
+  | value | meaning | eval? |
+  |---|---|---|
+  | `prompt` | read mode, prompt left as-is | ✅ |
+  | `typed` | free mode, typed without copying | ✅ |
+  | `edited_prompt` | read mode, prompt corrected after seeing the model | ✗ |
+  | `copied` | text is verbatim the model's output | ✗ |
+  | `edited_copy` | copied, then corrected | ✗ |
+
+- `eval_eligible` — derived from the above at write time. A `copied` row's "reference" *is*
+  the model's own output, so scoring it gives 0 % WER by construction; letting those into a
+  benchmark would make the number fiction.
+- `matches_hyp` — text equals the hypothesis exactly (how `copied` is detected regardless of
+  what the client claimed).
 - `edited` — read mode only: true if you changed the prompt text.
-- `typed_before_reveal`, `paste_events`, `keystrokes`, `revealed_at_ms` — the anchoring
-  evidence. Eval eligibility needs `typed_before_reveal: true` and `paste_events: 0`.
+- `ui_flow` — the UI regime that produced the row (`hyp-first-v2`), so data collected under
+  different flows is never silently pooled.
+- `paste_events`, `keystrokes`, `answer_ms` — effort signals.
 - `split` — `eval` or `train`, assigned from a hash of the speaker (never the clip), so one
   person can never land in both.
 - `consent_sha256` — the exact consent wording you agreed to.
@@ -125,9 +147,10 @@ import json, collections, pathlib
 rows = [json.loads(l) for l in
         pathlib.Path("submissions.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
 print(f"{len(rows)} rows, {sum(r['duration'] for r in rows)/60:.1f} min audio")
-print("by mode: ", collections.Counter(r["mode"] for r in rows))
-print("by split:", collections.Counter(r["split"] for r in rows))
-print("eval-eligible:", sum(r["typed_before_reveal"] and r["paste_events"] == 0 for r in rows))
+print("by mode:  ", collections.Counter(r["mode"] for r in rows))
+print("by source:", collections.Counter(r["human_text_source"] for r in rows))
+print("by split: ", collections.Counter(r["split"] for r in rows))
+print("eval-eligible:", sum(r["eval_eligible"] for r in rows))
 PY
 ```
 
@@ -143,7 +166,7 @@ import jiwer
 rows = [json.loads(l) for l in pathlib.Path(
     "data/bg/asr_playground_localtest/submissions.jsonl"
     ).read_text(encoding="utf-8").splitlines() if l.strip()]
-rows = [r for r in rows if r["asr_ok"] and r["asr_hyp"]]
+rows = [r for r in rows if r["asr_ok"] and r["asr_hyp"] and r["eval_eligible"]]
 refs = [normalize(r["human_text"]) for r in rows]
 hyps = [normalize(r["asr_hyp"]) for r in rows]
 m = jiwer.process_words(refs, hyps)

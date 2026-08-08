@@ -12,14 +12,25 @@ GP-v2 scores 4.12% on the frozen parliament holdout and that is its ONLY honest 
 because the FLEURS/CV train splits went into training and consumed the project's only
 out-of-domain eval sets. This rebuilds one from real microphones.
 
-TWO MODES, BOTH ANCHORING-FREE:
-  read  — a phrase from config/bg/asr_prompts.txt is shown, the volunteer reads it, and the
-          PROMPT is the reference. No typing. The reference existed before the model ran.
-  free  — the volunteer speaks freely, then types what they said into an EMPTY box. Only
-          after that is the hypothesis revealed, with a word-level diff.
-Never prefill the free-mode textarea with the hypothesis. Post-edited text drifts toward the
-model — accepting plausible-but-wrong words, missing omissions — which is fine for training
-data and fatal for a benchmark. `typed_before_reveal` records which rows are trustworthy.
+TWO MODES. The hypothesis is shown FIRST in both — typing is what kills completion, above all
+on a phone, and a form nobody finishes measures nothing:
+  read  — a phrase from config/bg/asr_prompts.txt is shown, the volunteer reads it aloud, and
+          the PROMPT is the reference. Zero typing: they glance at the diff and press send.
+          Ordering cannot bias this, because the reference existed before the model ran.
+  free  — the volunteer speaks freely; the hypothesis appears with a "copy it" button, and
+          they keep it or correct it.
+
+That asymmetry is deliberate. Free-mode text is a POST-EDIT of the model's output: people
+reading a plausible transcript reliably miss words the model dropped and accept
+plausible-but-wrong substitutions, and a copied-verbatim row is literally the model's own
+output used as its own reference (0% WER by construction). So free mode produces TRAINING
+data, and the frozen eval set is built from read mode — which is also the least work for the
+volunteer, so laziness is designed for rather than relied against.
+
+`human_text_source` records which of {prompt, edited_prompt, typed, copied, edited_copy}
+produced each row and is recomputed SERVER-SIDE, never trusted from the form; `eval_eligible`
+is derived from it at write time. `ui_flow` stamps the UI regime so rows collected under
+different flows are never silently pooled.
 
 MEMORY. Attention in the encoder's first stack is O(T^2) at 50 Hz, so a clip's cost grows
 quadratically: 15 s ~ 27 MB, 60 s ~ 430 MB. The 15 s cap is a MEMORY control, not a UX
@@ -171,7 +182,12 @@ INDEX_HTML = """<!doctype html>
  body { margin:0; font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
         color:var(--ink); background:var(--bg); }
  .wrap { max-width:720px; margin:0 auto; padding:0 16px 48px; }
- .brand img { display:block; width:100%; height:88px; object-fit:cover; border-radius:0 0 10px 10px; }
+ /* same treatment as the volunteer collector (collect.py): a centred white card with the
+    tall 16:9 art cropped to a short banner, so both apps read as one product. */
+ .brand { margin:.6rem auto .3rem; max-width:min(480px,92%); background:#fff;
+          border-radius:18px; padding:10px; box-shadow:0 1px 6px #0002; }
+ .brand img { display:block; width:100%; height:96px; object-fit:cover;
+              object-position:center; border-radius:10px; }
  h1 { font-size:22px; margin:18px 0 6px; }
  p.lede { color:var(--mut); margin:0 0 18px; }
  .card { background:#fff; border:1px solid var(--line); border-radius:10px;
@@ -203,10 +219,17 @@ INDEX_HTML = """<!doctype html>
  .hide { display:none; }
  .err { color:var(--bad); }
  .ok { color:var(--ok); }
+ .copybar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 10px; }
+ .copybar button { background:var(--ok); border-color:var(--ok); }
+ .big { font-size:17px; padding:13px 20px; width:100%; }
+ .step { display:inline-block; width:22px; height:22px; line-height:22px; text-align:center;
+         border-radius:50%; background:var(--accent); color:#fff; font-size:13px;
+         font-weight:700; margin-right:8px; }
  footer { color:var(--mut); font-size:13px; text-align:center; padding:24px 0 0; }
  footer a { color:var(--mut); }
 </style></head><body>
-<div class="brand"><img src="/asr/logo" alt="OmniVoice-BG"></div>
+<div class="brand"><img src="/asr/logo" alt="OmniVoice-BG"
+     onerror="this.style.display='none'"></div>
 <div class="wrap">
 
 <h1>Помогнете ни да намерим къде греши</h1>
@@ -253,25 +276,26 @@ INDEX_HTML = """<!doctype html>
     <audio id="play" controls class="hide" style="width:100%;margin-top:12px"></audio>
   </div>
 
-  <div id="typeCard" class="card hide">
-    <label id="typeLabel">Какво казахте? Напишете го точно.</label>
-    <p class="muted" id="typeHint">Пишете по памет, преди да видите какво е чул моделът —
-    така сравнението е честно.</p>
-    <textarea id="human" placeholder="Напишете тук…"></textarea>
-    <div class="row" style="margin-top:12px">
-      <button id="reveal" class="ghost">Покажи какво чу моделът</button>
-      <button id="send">Изпрати</button>
-      <span class="muted" id="sendMsg"></span>
-    </div>
-  </div>
-
   <div id="resCard" class="card hide">
-    <label>Моделът чу:</label>
+    <label><span class="step">2</span>Моделът чу:</label>
     <div class="hyp" id="hypBox"></div>
-    <p class="legend" style="margin:10px 0 0">
+    <p class="legend" style="margin:10px 0 0" id="legend">
       <span class="sub">замяна</span><span class="del">пропуснато</span>
       <span class="ins">добавено</span>
       <span class="muted" id="stat"></span></p>
+  </div>
+
+  <div id="typeCard" class="card hide">
+    <label id="typeLabel"><span class="step">3</span>Какво всъщност казахте?</label>
+    <p class="muted" id="typeHint"></p>
+    <div class="copybar hide" id="copybar">
+      <button id="copyHyp" class="big">✓ Моделът разпозна вярно — копирай текста</button>
+    </div>
+    <textarea id="human" placeholder="Напишете тук…"></textarea>
+    <div class="row" style="margin-top:12px">
+      <button id="send" class="big">Изпрати</button>
+      <span class="muted" id="sendMsg"></span>
+    </div>
   </div>
 
   <div class="card">
@@ -292,9 +316,15 @@ INDEX_HTML = """<!doctype html>
 const $ = s => document.querySelector(s);
 let mode = "read", prompt_id = null, promptText = "", clip_id = null, blob = null;
 let mediaRec = null, chunks = [], t0 = 0, timerH = null, consent = null;
-let revealed = false, revealedAt = 0, typedFirst = true, pastes = 0, keys = 0, tStart = 0;
+let pastes = 0, keys = 0, copied = false, tStart = 0;
 let hyp = null, asrOk = false, asrErr = null, sent = 0;
 const MAXSEC = 15;
+// The hypothesis is shown BEFORE the volunteer writes anything, so their text is a post-edit
+// of it. That is deliberate (typing on a phone is the thing that kills completion), but it
+// means free-mode text cannot serve as an unbiased reference. We record exactly where each
+// answer came from — see human_text_source below — and the eval set is built from read mode,
+// where the reference is the prompt and no ordering can bias it.
+const UI_FLOW = "hyp-first-v2";
 
 fetch("/asr/consent").then(r => r.json()).then(c => {
   consent = c; $("#consentText").textContent = c.text;
@@ -330,9 +360,10 @@ function nextPrompt() {
 }
 function resetClip() {
   clip_id = null; blob = null; hyp = null; asrOk = false; asrErr = null;
-  revealed = false; revealedAt = 0; typedFirst = true; pastes = 0; keys = 0;
+  pastes = 0; keys = 0; copied = false;
   $("#human").value = ""; $("#play").classList.add("hide");
   $("#typeCard").classList.add("hide"); $("#resCard").classList.add("hide");
+  $("#copybar").classList.add("hide");
   $("#recMsg").textContent = ""; $("#sendMsg").textContent = "";
   $("#timer").textContent = "0.0 с / " + MAXSEC + " с";
 }
@@ -389,40 +420,72 @@ function transcribe() {
     });
 }
 function afterClip() {
-  $("#typeCard").classList.remove("hide");
   tStart = Date.now();
+  // STEP 2 — the model's output, immediately and without being asked for. In read mode we
+  // already have a reference (the prompt), so it is shown diffed; in free mode there is
+  // nothing to diff against yet, so it is shown plain.
+  if (hyp !== null) {
+    $("#resCard").classList.remove("hide");
+    if (mode === "read") { showDiff(promptText); }
+    else {
+      $("#hypBox").textContent = hyp || "(нищо не беше разпознато)";
+      $("#legend").classList.add("hide");
+    }
+  }
+  // STEP 3 — what they actually said.
+  $("#typeCard").classList.remove("hide");
   if (mode === "read") {
-    $("#typeLabel").textContent = "Прочетохте ли фразата точно?";
-    $("#typeHint").textContent = "Ако сте се объркали или сте казали нещо друго, поправете " +
-      "текста тук. Иначе не пипайте нищо.";
+    $("#typeLabel").innerHTML = '<span class="step">3</span>Прочетохте ли фразата точно?';
+    $("#typeHint").textContent = "Ако сте прочели фразата както е показана, просто натиснете " +
+      "Изпрати. Поправете текста само ако сте се объркали или сте казали нещо друго.";
     $("#human").value = promptText;         // the PROMPT, never the model's guess
+    $("#copybar").classList.add("hide");    // nothing to copy: the reference is the prompt
   } else {
-    $("#typeLabel").textContent = "Какво казахте? Напишете го точно.";
-    $("#typeHint").textContent = "Пишете по памет, преди да видите какво е чул моделът — " +
-      "така сравнението е честно.";
-    $("#human").value = "";                 // never prefilled with the hypothesis
+    $("#typeLabel").innerHTML = '<span class="step">3</span>Какво всъщност казахте?';
+    $("#typeHint").textContent = "Ако моделът е разпознал точно това, което казахте, " +
+      "натиснете зеления бутон — не е нужно да пишете нищо. Ако има разлика, копирайте и " +
+      "поправете само сгрешените думи. Разчитаме на Вашата честност: текстът трябва да " +
+      "отговаря на това, което наистина сте казали.";
+    $("#human").value = "";                 // never auto-filled — copying must be a choice
+    $("#copybar").classList.toggle("hide", !hyp);
   }
 }
 $("#human").addEventListener("paste", () => { pastes++; });
 $("#human").addEventListener("keydown", () => { keys++; });
 
-$("#reveal").onclick = () => {
-  if (!hyp) { $("#sendMsg").textContent = "Няма разпознат текст."; return; }
-  if (!revealed) {
-    revealed = true; revealedAt = Date.now() - tStart;
-    typedFirst = ($("#human").value.trim().length > 0) || mode === "read";
-  }
-  showDiff();
+$("#copyHyp").onclick = () => {
+  $("#human").value = hyp || "";
+  copied = true;
+  $("#human").focus();
+  $("#copyHyp").textContent = "✓ Копирано — поправете, ако има разлика";
 };
-function showDiff() {
-  const ref = $("#human").value.trim();
+
+function showDiff(refText) {
+  const ref = (refText !== undefined ? refText : $("#human").value).trim();
   fetch("/asr/diff", {method:"POST", headers:{"Content-Type":"application/json"},
                       body: JSON.stringify({ref: ref, hyp: hyp})})
     .then(r => r.json()).then(d => {
       $("#hypBox").innerHTML = d.html;
-      $("#stat").textContent = " · " + d.errors + " разлики от " + d.ref_words + " думи";
+      $("#legend").classList.remove("hide");
+      $("#stat").textContent = d.errors === 0
+        ? " · съвпада дума по дума"
+        : " · " + d.errors + " разлики от " + d.ref_words + " думи";
       $("#resCard").classList.remove("hide");
     });
+}
+
+/* Where the submitted text came from — the single most important field for deciding which
+   rows may enter a benchmark:
+     prompt        read mode, prompt left as-is        -> unanchored, EVAL ELIGIBLE
+     edited_prompt read mode, prompt corrected         -> corrected after seeing the model
+     typed         free mode, typed without copying    -> unanchored, EVAL ELIGIBLE
+     copied        free mode, model output copied      -> IS the model output; never eval
+     edited_copy   free mode, copied then corrected    -> post-edited; training data      */
+function humanTextSource() {
+  const t = $("#human").value.trim();
+  if (mode === "read") return t === promptText.trim() ? "prompt" : "edited_prompt";
+  if (!copied) return "typed";
+  return t === (hyp || "").trim() ? "copied" : "edited_copy";
 }
 $("#send").onclick = () => {
   const human = $("#human").value.trim();
@@ -438,10 +501,12 @@ $("#send").onclick = () => {
   fd.append("asr_ok", asrOk ? "1" : "0");
   fd.append("asr_hyp", hyp || "");
   fd.append("asr_error", asrErr || "");
-  fd.append("typed_before_reveal", typedFirst ? "1" : "0");
-  fd.append("revealed_at_ms", String(revealedAt));
+  fd.append("human_text_source", humanTextSource());
+  fd.append("hyp_copied", copied ? "1" : "0");
+  fd.append("ui_flow", UI_FLOW);
   fd.append("paste_events", String(pastes));
   fd.append("keystrokes", String(keys));
+  fd.append("answer_ms", String(Date.now() - tStart));
   fd.append("consent_version", consent.version);
   fd.append("consent_sha256", consent.sha256);
   if (!clip_id && blob) fd.append("audio", blob, "clip.webm");   // ASR was down: send audio
@@ -452,7 +517,7 @@ $("#send").onclick = () => {
       sent++; $("#counter").textContent = sent + " изпратени";
       $("#delTok").textContent = j.delete_token;
       $("#sendMsg").innerHTML = "<span class='ok'>Благодарим!</span>";
-      if (!revealed && hyp) showDiff();          // always show the payoff after submitting
+      if (hyp) showDiff();      // re-diff against the final text: the payoff, and a check
       $("#send").disabled = false;
     })
     .catch(e => { $("#sendMsg").innerHTML = "<span class='err'>" + e.message + "</span>";
@@ -656,8 +721,9 @@ def build_app(recognizer, bank, out_dir: pathlib.Path, consent: dict, model_id: 
                      consent_sha256: str = Form(...), clip_id: str = Form(""),
                      prompt_id: str = Form(""), prompt_text: str = Form(""),
                      asr_ok: str = Form("0"), asr_hyp: str = Form(""),
-                     asr_error: str = Form(""), typed_before_reveal: str = Form("1"),
-                     revealed_at_ms: int = Form(0), paste_events: int = Form(0),
+                     asr_error: str = Form(""), human_text_source: str = Form("typed"),
+                     hyp_copied: str = Form("0"), ui_flow: str = Form("unknown"),
+                     answer_ms: int = Form(0), paste_events: int = Form(0),
                      keystrokes: int = Form(0), audio: Optional[UploadFile] = None):
         sp = slug_speaker(speaker)
         if len(sp) < 2:
@@ -686,6 +752,18 @@ def build_app(recognizer, bank, out_dir: pathlib.Path, consent: dict, model_id: 
             raise HTTPException(400, "Липсва запис.")
         dur = ffprobe_duration(dest) or 0.0
 
+        # Re-derive the source rather than trusting the form field, so a stale or tampered
+        # client cannot mark a copied hypothesis as eval-eligible.
+        src = (human_text_source or "").strip()
+        if mode == "read":
+            src = "prompt" if prompt_text and human == prompt_text.strip() else "edited_prompt"
+        elif asr_hyp and human == asr_hyp.strip():
+            src = "copied"                      # verbatim model output, whatever was claimed
+        elif hyp_copied == "1":
+            src = "edited_copy"
+        elif src not in ("typed", "edited_copy", "copied"):
+            src = "typed"
+
         row = {
             "id": cid, "speaker": sp, "speaker_hash": sph,
             "consent_version": consent["version"], "consent_sha256": consent["sha256"],
@@ -699,8 +777,17 @@ def build_app(recognizer, bank, out_dir: pathlib.Path, consent: dict, model_id: 
             "asr_decode": "greedy_search",
             "human_text": human,
             "edited": bool(prompt_text) and human.strip() != prompt_text.strip(),
-            "typed_before_reveal": typed_before_reveal == "1",
-            "revealed_at_ms": revealed_at_ms, "paste_events": paste_events,
+            # Provenance of the reference text. Recomputed server-side rather than trusted:
+            # the client is a web page, and this field decides what may enter a benchmark.
+            "human_text_source": src,
+            "hyp_copied": hyp_copied == "1",
+            "matches_hyp": bool(asr_hyp) and human.strip() == asr_hyp.strip(),
+            # Eval eligibility, decided at write time so no downstream consumer has to
+            # re-derive it. A row whose "reference" IS the model's own output would score 0%
+            # WER by construction — including those would make the benchmark fiction.
+            "eval_eligible": src in ("prompt", "typed"),
+            "ui_flow": ui_flow,
+            "answer_ms": answer_ms, "paste_events": paste_events,
             "keystrokes": keystrokes,
             "split": split_for(sph), "ts": int(time.time()),
         }
