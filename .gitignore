@@ -74,3 +74,5 @@ viktoria_bg.txt
 
 # ASR serving venv (sherpa-onnx only; the training venv/ is separate and also ignored)
 /venv-asr/
+# Exported ASR model binaries (rebuild with zipformer/export-onnx.py; MODEL_CARD.json IS tracked)
+/models/asr/**/*.onnx

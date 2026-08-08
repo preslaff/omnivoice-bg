@@ -1,0 +1,43 @@
+{
+  "model_id": "gp-v2-e30-avg5-int8",
+  "description": "Bulgarian Zipformer transducer (GP-v2), int8 ONNX for CPU serving",
+  "architecture": "Zipformer transducer, non-causal, 65,549,011 params, BPE-500, 80-dim fbank @16kHz",
+  "trained_on": "1,744.8 h / 872,975 cuts across 8 registers (see docs/BG_ASR_DATA_PIPELINE.md)",
+  "export": {
+    "script": "icefall zipformer/export-onnx.py",
+    "epoch": 30,
+    "avg": 5,
+    "use_averaged_model": true,
+    "quantization": "dynamic int8 (MatMul), opset 13",
+    "exported": "2026-08-08"
+  },
+  "decode": "greedy_search (no external LM — the n-gram was measured and retired, see BG_ASR_BENCHMARK.md)",
+  "wer": {
+    "parliament_dev_torch_fp32_greedy": 4.0,
+    "parliament_dev_onnx_fp32_greedy": 4.03,
+    "parliament_dev_onnx_int8_greedy": 4.06,
+    "parliament_test_torch_beam4": 4.12,
+    "note": "dev WER measured with eval_onnx_bg.py; int8 verified on a VNNI CPU only"
+  },
+  "feature_config": {
+    "sample_rate": 16000,
+    "feature_dim": 80,
+    "low_freq": 20,
+    "high_freq": -400,
+    "dither": 0,
+    "snip_edges": false,
+    "note": "sherpa-onnx defaults; identical to the lhotse config used in training"
+  },
+  "bytes": {
+    "decoder-epoch-30-avg-5.int8.onnx": 540689,
+    "encoder-epoch-30-avg-5.int8.onnx": 72828389,
+    "joiner-epoch-30-avg-5.int8.onnx": 259417,
+    "tokens.txt": 7119
+  },
+  "sha256": {
+    "decoder-epoch-30-avg-5.int8.onnx": "bd63324df29844c05c1753eb94a358a50f5aff28d3f7e3e71539614dabc7b177",
+    "encoder-epoch-30-avg-5.int8.onnx": "aff520f374a245f2af84966b3dd2b04ff02e31e40dbc2e1cb403f6ec25dafb62",
+    "joiner-epoch-30-avg-5.int8.onnx": "a92c0927446915220351cf2cfdb7112ed82bbfd27bd51a751b13a6c2d860ec73",
+    "tokens.txt": "863ff314c172148a74301a4579eda890e1c957ae797ffffafd295473d9f0f3f5"
+  }
+}

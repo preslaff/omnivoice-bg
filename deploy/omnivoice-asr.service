@@ -1,0 +1,86 @@
+# systemd unit for the OmniVoice-BG ASR playground (runs on the VPS, port 8005).
+#
+# SEPARATE from omnivoice-collect.service on purpose. The VPS is a 2 vCPU / 3.9 GB droplet
+# that ALSO runs compliance-backend (gunicorn ~500 MB), three celery workers, postgres,
+# next-server, paperlessai and docker — with ~1.7 GB available and 2.5 GB already in swap.
+# cgroup limits are per-unit, so the only way to give ASR a hard memory ceiling without
+# putting the working collector inside it is a second unit. A memory spike or a segfault in
+# bundled C++ here kills THIS unit and nothing else.
+#
+# It needs its own venv (sherpa-onnx must not be able to break the collector's interpreter):
+#
+#   sudo apt install ffmpeg python3-venv
+#   sudo python3 -m venv /opt/omnivoice/venv-asr
+#   sudo /opt/omnivoice/venv-asr/bin/pip install fastapi uvicorn python-multipart \
+#        sherpa-onnx==1.13.4
+#   # NOTE sherpa-onnx installs TWO packages: sherpa-onnx (the binding) plus a mandatory
+#   # sherpa-onnx-core (the native libs). For an offline install, `pip download` both.
+#
+# Files to rsync into /opt/omnivoice (see deploy/README.md for the exact command):
+#
+#   /opt/omnivoice/
+#   ├── omnivoice/cli/asr_playground.py
+#   ├── config/bg/asr_prompts.txt
+#   ├── config/bg/consent_asr_v1.md
+#   ├── deploy/logo.png
+#   └── models/asr/gp-v2/{encoder,decoder,joiner}-epoch-30-avg-5.int8.onnx
+#                        tokens.txt  MODEL_CARD.json          (~74 MB total)
+#
+# IMPORTANT: launch as a SCRIPT BY PATH (python omnivoice/cli/asr_playground.py), NOT
+# `python -m omnivoice.cli.asr_playground`. The -m form imports omnivoice/__init__.py,
+# which pulls in torch — absent on this VPS and it would crash. Same rule as collect.py.
+#
+# Install:
+#   sudo cp /opt/omnivoice/deploy/omnivoice-asr.service /etc/systemd/system/
+#   sudo install -m 600 -o root -g root /dev/null /etc/omnivoice-asr.env
+#   printf 'OMNIVOICE_ASR_SECRET=%s\n' "$(openssl rand -hex 32)" \
+#        | sudo tee /etc/omnivoice-asr.env >/dev/null    # delete tokens; NOT in git
+#   sudo systemctl daemon-reload && sudo systemctl enable --now omnivoice-asr
+#   journalctl -u omnivoice-asr -f
+#
+# Bound to 127.0.0.1 — nginx (location /asr/) is the only path in.
+
+[Unit]
+Description=OmniVoice-BG ASR playground (sherpa-onnx, CPU)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/omnivoice
+EnvironmentFile=-/etc/omnivoice-asr.env
+ExecStart=/opt/omnivoice/venv-asr/bin/python omnivoice/cli/asr_playground.py \
+    --host 127.0.0.1 --port 8005 \
+    --model-dir /opt/omnivoice/models/asr/gp-v2 \
+    --out-dir /opt/omnivoice/data/bg/asr_playground \
+    --max-sec 15 --num-threads 1
+
+# --- resource ceiling: the load-bearing part on a shared box ---
+# MemoryHigh throttles and reclaims BEFORE anything dies, so pressure shows up as latency
+# first; MemoryMax is the hard wall where the cgroup OOM killer takes this unit and only
+# this unit. MemorySwapMax=0 because thrashing an inference is worse than failing it — and
+# this box is already 2.5 GB into swap.
+MemoryHigh=576M
+MemoryMax=768M
+MemorySwapMax=0
+OOMPolicy=kill
+# One of the two vCPUs, at low priority: a decode must never starve the other production
+# services on this droplet.
+CPUQuota=100%
+CPUWeight=20
+TasksMax=32
+LimitNOFILE=1024
+
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5          # a crash loop stops rather than pegging a shared CPU
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/omnivoice/data/bg/asr_playground
+
+[Install]
+WantedBy=multi-user.target
