@@ -71,3 +71,6 @@ viktoria_bg.txt
 /examples/joro_konsko.txt
 # Third-party commercial ad copy (brand + prices).
 /examples/reklama_home_max.txt
+
+# ASR serving venv (sherpa-onnx only; the training venv/ is separate and also ignored)
+/venv-asr/

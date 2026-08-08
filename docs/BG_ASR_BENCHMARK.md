@@ -61,6 +61,28 @@ only register-matched text could, and for "arbitrary Bulgarian" no such text exi
 The 1.7 B-param-equivalent lesson in one line: **the transducer's own prior now exceeds a
 3-gram's, so the shipped system is LM-free.** `LG.pt` and the ARPA are kept on disk, unused.
 
+### ONNX / int8 export parity (2026-08-08)
+
+Exported for CPU serving (`zipformer/export-onnx.py --epoch 30 --avg 5 --use-averaged-model 1`,
+int8 dynamic quantization) and scored with `eval_onnx_bg.py` — sherpa-onnx on CPU, torch-free,
+same `bg_text_norm` normalizer and `jiwer` scoring as every other row here:
+
+| System | dev WER % | Δ | RTF (4 threads) |
+|---|---|---|---|
+| torch fp32, greedy (icefall `decode.py`) | 4.00 | reference | — |
+| ONNX fp32, greedy | 4.03 | +0.03 | 0.008 |
+| **ONNX int8, greedy** | **4.06** | **+0.03 vs ONNX fp32** | 0.007 |
+
+**Quantization costs 0.03 points** — and the ONNX↔torch gap is smaller than the difference
+between the two scoring paths (47,717 reference words here vs 47,605 in icefall's scorer), so
+it is not resolvable as a regression. sherpa-onnx's fbank defaults (`low_freq=20`,
+`high_freq=-400`, `dither=0`, `snip_edges=False`) are identical to the lhotse config used for
+training, which is why the feature pipeline transfers without adjustment.
+
+Caveat: measured on a Ryzen 9 9900X3D with `avx512_vnni`. `export-onnx.py` does not pass
+`reduce_range=True`, so **int8 accuracy and speed must be re-measured on any non-VNNI
+deployment CPU** before trusting these numbers there.
+
 ## Caveats — read before quoting the FLEURS/CV numbers
 
 - **FLEURS and CV are no longer out-of-domain.** GP-v2 trained on their *train* splits, so
@@ -270,5 +292,12 @@ if lattices/confidences are needed downstream.
 
 - **CER alongside WER** — Bulgarian is inflectional (near-miss endings count as full word
   subs); CER is a useful companion metric, cheap from the existing `recogs-*` files.
-- **sherpa-onnx int8 export** — shippable standalone recognizer for edge deployment (~66 MB).
+- **sherpa-onnx int8 export** — BUILT 2026-08-08, measured: encoder **72.8 MB** + decoder
+  0.5 MB + joiner 0.3 MB = **73.6 MB** int8 (fp32: 263.1 / 2.1 / 1.0 = 266.2 MB). The earlier
+  "~66 MB" was arithmetic (65.5 M params × 1 byte), not a measurement — `export-onnx.py`
+  quantizes `MatMul` only, so convolutions, biases and norm scales stay fp32.
+  Op census: the encoder's 370 fp32 `MatMul` became 290 `MatMulInteger` + 80 `MatMul`; the 80
+  survivors are exactly the attention activation×activation products (5 per layer × 16 layers),
+  which dynamic quantization cannot touch — i.e. **100 % of eligible ops were quantized**, and
+  the encoder contains no `Gemm` for the quantizer to silently skip.
 - **`--causal 1` streaming variant** — separate run if word-level live streaming is needed.

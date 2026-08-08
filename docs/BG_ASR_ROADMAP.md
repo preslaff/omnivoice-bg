@@ -67,7 +67,8 @@ Change ONE variable at a time so effects stay attributable:
   early while dev still improves with data; or the mean-WER target is missed with data-side
   levers exhausted). L needs `--max-duration ~200–250` on 16 GB (~2× compute/batch → ~3–4
   days). Isolates the CAPACITY effect.
-- Deployment note: M stays the edge/streaming artifact (~66 MB int8 sherpa-onnx); L (if built)
+- Deployment note: M stays the edge/streaming artifact (**73.6 MB** int8 sherpa-onnx, measured
+  2026-08-08 — the old "~66 MB" was params × 1 byte, not a real export); L (if built)
   is the server-side best model. Published M→L gains at ~1–2k h are ~5–10 % relative — worth
   having only after the data levers (balance/mux, broad LM, self-training round 2) are spent.
 
