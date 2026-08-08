@@ -86,11 +86,17 @@ payoffs, in value order:
 3. **Benchmark sparring partner** — an independent strong model keeps the eval honest.
 Sequencing: strictly after GP-v2 (same GPU; GP-v2 answers the diversity question first).
 
-### 3. Streaming model (`--causal 1`)
+### 3. Streaming model (`--causal 1`) — ★ CURRENT PRIORITY (2026-08-08)
 Re-train the Zipformer as a **streaming** (chunk-wise, causal) model for real-time / on-device
 use. Reuses the same fbank + BPE + (v2) corpus; costs ~1–2 % abs WER vs offline but enables
 live captioning and a sherpa-onnx **streaming** export. Do this **after v2** so it trains on
 the larger, cleaner corpus.
+
+Prepared and ready to launch — full config, launch line, latency-ladder eval and the decisions
+taken (from scratch, not warm-started) are in
+**[BG_ASR_STREAMING_PLAN.md](BG_ASR_STREAMING_PLAN.md)**. `asr/train_resumable.sh` now takes
+`CAUSAL=1` (plus `CHUNK_SIZE` / `LEFT_CONTEXT`), defaulting to 0 so existing invocations are
+unchanged.
 
 ## Where GP-v2 landed (2026-08-08) — what's resolved, what's now blocking
 
@@ -112,6 +118,40 @@ the larger, cleaner corpus.
   longer holds training exposure constant. The fresh self-recorded set (phase 1's leftover)
   is therefore promoted from "nice to have" to **the next thing to build** — without it,
   4.12 % on parliament is the only number GP-v2 can honestly claim.
+
+## ASR playground — PAUSED mid-build (2026-08-08), resumable
+
+The volunteer playground that rebuilds the missing out-of-domain eval set. Paused in favour of
+the streaming run; nothing is half-deployed, and the live site is untouched.
+
+**Done and committed:**
+- **Phase 0** — int8 ONNX export of GP-v2, parity measured: torch 4.00 → ONNX fp32 4.03 →
+  ONNX int8 4.06 on parliament dev. Real size **73.6 MB** (the docs' old "~66 MB" was
+  params × 1 byte). `eval_onnx_bg.py` is the torch-free harness.
+- **Phase 0.5 recon** — the VPS is a 2 vCPU / 3.9 GB droplet, `avx2` only (**no VNNI**),
+  1.7 GB available with 2.5 GB already swapped, shared with compliance-backend, celery,
+  postgres, next-server, paperlessai. Budget set to `MemoryMax=768M`, `CPUQuota=100%`.
+  The benchmark sweep was skipped by decision.
+- **Phase 1 build** — `omnivoice/cli/asr_playground.py`, a separate service (own port, venv,
+  unit, data dir) verified locally against the real model: 190 MB startup RSS, 303 MB peak
+  under 12 concurrent 14 s clips, 429 admission control, submit-works-with-recognizer-down,
+  consent-hash enforcement, delete round-trip. Plus an 89-prompt leakage-checked bank,
+  versioned consent, systemd unit, nginx offline page and `MODEL_CARD.json`.
+- UI revised to hypothesis-first with a copy button (completion beats purity), with
+  `human_text_source` recomputed server-side so copied rows can never enter a benchmark.
+
+**Not started — pick up here:**
+1. Deploy to `/opt/omnivoice` (rsync + `venv-asr` + unit + `OMNIVOICE_ASR_SECRET`), bound to
+   127.0.0.1:8005. Nothing public changes.
+2. Soak over an SSH tunnel — **this is where real RTF on the VNNI-less core gets measured**,
+   and where int8 accuracy there gets re-checked.
+3. nginx `location /asr/` on the live certbot-managed file (the only step that can disturb the
+   running site: back up, `nginx -t`, reload).
+4. The one-line `<a href="/asr/">` in `collect.py` — currently the collector has **zero**
+   references to the playground, deliberately, so volunteers never meet a 404.
+5. Freeze the eval split + the `merge_train_corpus.py` hard-fail guard.
+
+Local test guide: [BG_ASR_PLAYGROUND_TESTING.md](BG_ASR_PLAYGROUND_TESTING.md).
 
 ## Rationale for this order
 

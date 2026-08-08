@@ -9,6 +9,14 @@
 #
 # Usage (under tmux):
 #   bash ~/WORK/OmniVoice/asr/train_resumable.sh
+#
+# GP-v2 (offline, shipped 4.12% test):
+#   EXP=zipformer/exp_gp ENABLE_MUSAN=true \
+#     TRAIN_MANIFEST=bg_cuts_train_gp_shuf.jsonl.gz bash asr/train_resumable.sh
+#
+# GP-S (streaming/causal — same corpus, one variable changed):
+#   EXP=zipformer/exp_gp_stream CAUSAL=1 ENABLE_MUSAN=true \
+#     TRAIN_MANIFEST=bg_cuts_train_gp_shuf.jsonl.gz bash asr/train_resumable.sh
 # After a reboot, just run the same line again — it picks up from the last epoch-N.pt.
 # For zero-touch recovery, add to crontab:  @reboot tmux new -d -s train 'bash .../train_resumable.sh'
 set -uo pipefail
@@ -21,6 +29,15 @@ MAX_DUR="${MAX_DUR:-350}"
 PY="${PY:-$HOME/WORK/OmniVoice/venv/bin/python}"
 ENABLE_MUSAN="${ENABLE_MUSAN:-false}"        # GP-v2: true (needs data/fbank/musan_cuts.jsonl.gz)
 TRAIN_MANIFEST="${TRAIN_MANIFEST:-bg_cuts_train.jsonl.gz}"   # GP-v2: bg_cuts_train_gp.jsonl.gz
+# CAUSAL=1 trains the STREAMING variant: chunk-wise attention with bounded left context, so
+# the model can emit words while the speaker is still talking. It is a separate run, not a
+# conversion — a non-causal checkpoint cannot be exported for streaming. Costs ~1-2 points
+# absolute WER vs offline (the published price of giving up right context).
+# CHUNK_SIZE / LEFT_CONTEXT are sampled randomly per batch from these lists, which is what
+# makes ONE checkpoint serve multiple latencies at decode time. Ignored when CAUSAL=0.
+CAUSAL="${CAUSAL:-0}"
+CHUNK_SIZE="${CHUNK_SIZE:-16,32,64,-1}"
+LEFT_CONTEXT="${LEFT_CONTEXT:-64,128,256,-1}"
 
 cd "$REC"
 export PYTHONPATH="$ICEFALL:${PYTHONPATH:-}"
@@ -36,7 +53,8 @@ while true; do
   echo "[resumable] launching train.py --start-epoch $start (last completed: ${last:-none})"
   "$PY" zipformer/train.py \
     --world-size 1 --num-epochs "$NUM_EPOCHS" --start-epoch "$start" \
-    --use-fp16 1 --causal 0 \
+    --use-fp16 1 --causal "$CAUSAL" \
+    --chunk-size "$CHUNK_SIZE" --left-context-frames "$LEFT_CONTEXT" \
     --exp-dir "$EXP" \
     --bpe-model data/lang_bpe_500/bpe.model \
     --max-duration "$MAX_DUR" --num-workers 2 --save-every-n 2000 \
