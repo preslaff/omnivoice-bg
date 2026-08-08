@@ -1,10 +1,103 @@
-# Bulgarian Parliament ASR — benchmark (v1)
+# Bulgarian ASR — benchmark (v1 · GP-v2)
 
-**Headline: 5.29% WER** on the frozen parliament test set (unseen sessions), from a
-65.5M-param Zipformer transducer trained from scratch on 649 h of Kaldi-aligned Bulgarian
-speech. Companion to [BG_ASR_PLAN.md](BG_ASR_PLAN.md) (recipe/inventory) and
-[BG_ASR_V2_PLAN.md](BG_ASR_V2_PLAN.md) (recovery/data-quality roadmap). Reference paper:
-`2203.14876` (Finnish Parliament ASR).
+**Headline: 4.12% WER** on the frozen parliament test set (unseen sessions) — GP-v2, a
+65.5M-param Zipformer transducer trained from scratch on **1,744.8 h** of Bulgarian speech
+across eight registers. Supersedes v1's 5.29% (649 h, same architecture, same frozen split),
+a **22% relative** gain from data diversity alone. Companion to
+[BG_ASR_PLAN.md](BG_ASR_PLAN.md) (recipe/inventory),
+[BG_ASR_DATA_PIPELINE.md](BG_ASR_DATA_PIPELINE.md) (corpus construction) and
+[BG_ASR_ROADMAP.md](BG_ASR_ROADMAP.md) (what's next). Reference paper: `2203.14876`
+(Finnish Parliament ASR).
+
+# GP-v2 (2026-08-08) — the general-purpose model
+
+## Model & data
+
+| | |
+|---|---|
+| Architecture | Zipformer transducer (pruned), non-causal, **65,549,011** params — *identical to v1* |
+| Features / tokenizer | 80-dim fbank @ 16 kHz · BPE-500 (same model as v1) |
+| Training | fp16, ScaledAdam + Eden, 30 epochs, `--max-duration 350`, **MUSAN CutMix on**; final dev loss **0.1180** (v1: 0.1315) |
+| Decode model | epoch 30, average of last 5 (`--avg 5 --use-averaged-model`) |
+| Train | 872,975 cuts / **1,744.8 h** — plsten 573.3 · AB400 397.5 · ytdr 292.6 · ytgi 214.0 · ytbb 135.1 · BNR 102.9 · sivov 12.8 · FLEURS-train 9.5 · CV-train 7.0 |
+| Dev / Test | unchanged frozen parliament holdout (6.2 h / 16.4 h) |
+
+Only the **data** changed vs v1 — architecture, tokenizer, schedule and split are identical,
+so the delta is attributable (the roadmap's one-variable-at-a-time discipline).
+
+## Results
+
+| Decoding method | LM | dev WER % | **test WER %** | FLEURS | CV |
+|---|---|---|---|---|---|
+| greedy_search | — | 4.00 | — | 10.01 | 9.01 |
+| **modified_beam_search (beam 4)** | — | **3.94** | **4.12** | **9.84** | **8.69** |
+| fast_beam_search_nbest_LG @ 0.1 | GP word 3-gram | 3.99 | — | 11.13 | 11.20 |
+| fast_beam_search_nbest_LG @ 0.2 | GP word 3-gram | 3.99 | — | 12.80 | 11.58 |
+| fast_beam_search_nbest_LG @ 0.2 | *v1* parliament 3-gram | 4.12 | — | — | — |
+
+Test error breakdown (best system, 123,605 words): **5087 errors = 1314 ins / 1517 del /
+2256 sub** (v1: 6543 = 1487/2018/3038). Substitutions fell 26% — the signature of a
+diversity intervention: fewer wrong-word confusions, not merely better silence handling.
+dev 3.94 → test 4.12 is a tight gap, so the LM sweep did not lean on dev.
+
+### The external LM stopped helping — and the rebuild proved why
+
+On v1 the word 3-gram was the best system (5.46 → 5.29). On GP-v2 it **loses everywhere**,
+even after being rebuilt on the full GP corpus text (14.38 M words / 296,230 types, vs v1's
+7.91 M / 164,262 — `bg_word_3gram_gp.arpa`, `data/lang_bpe_500_gp/LG.pt`):
+
+| | v1 LM | GP LM |
+|---|---|---|
+| dev OOV | 0.26 % | 0.15 % |
+| FLEURS OOV | 4.98 % | 3.21 % |
+| CV OOV | 7.90 % | **4.06 %** |
+
+The rebuild **halved CV's OOV and CV's WER still got worse** (8.69 → 11.20), with
+substitutions rising 2006 → 2376. That isolates the mechanism: an n-gram contributes
+coverage *and* a phrasing prior, and only coverage improved. The prior is dominated by
+parliament/audiobook/YouTube speech, so on read-encyclopedic or crowd-read input the LM
+actively rewrites correct words into corpus-likelier ones. A bigger n-gram cannot fix this;
+only register-matched text could, and for "arbitrary Bulgarian" no such text exists.
+The 1.7 B-param-equivalent lesson in one line: **the transducer's own prior now exceeds a
+3-gram's, so the shipped system is LM-free.** `LG.pt` and the ARPA are kept on disk, unused.
+
+## Caveats — read before quoting the FLEURS/CV numbers
+
+- **FLEURS and CV are no longer out-of-domain.** GP-v2 trained on their *train* splits, so
+  9.84 / 8.69 measure held-out-split, **in-corpus** performance — domain adaptation, not
+  generalization. The v1 → GP-v2 movement on these sets (20.35 → 9.84, 22.27 → 8.69)
+  conflates the two and must not be quoted as a generalization gain.
+- **Not leakage, verified:** zero cut-id, zero recording-id and **zero sentence-text**
+  overlap between the train and test splits of both corpora (0/658 FLEURS, 0/3201 CV).
+- **Unverifiable residual:** speaker overlap in FLEURS. Its splits are sentence-level
+  (inherited from FLoRes) and it publishes no speaker ids, so the same voices may appear in
+  both splits. CV's official splits are speaker-disjoint by construction.
+- **The Whisper head-to-head no longer holds training exposure constant** — Whisper is
+  zero-shot on FLEURS while we adapted to it. GP-v2's only unambiguous number is the
+  parliament one (4.12 %). A fresh self-recorded set in nobody's training data is now the
+  blocking dependency for any generalization claim (roadmap phase 1).
+
+## Reproducibility (GP-v2)
+
+- Corpus: `merge_train_corpus.py` → `bg_cuts_train_gp_shuf.jsonl.gz` (global seeded shuffle).
+- Train: `asr/train_resumable.sh` with `EXP=zipformer/exp_gp ENABLE_MUSAN=true
+  TRAIN_MANIFEST=bg_cuts_train_gp_shuf.jsonl.gz`.
+- LM (built, measured, not shipped): `prep_lm_text.py --cuts <gp manifest> --exclude-cuts
+  <dev test fleurs cv>` → `TAG=_gp PREP=0 LEAK_CHECK=ids build_kenlm_bg.sh` →
+  `TAG=_gp compile_lg_bg.sh`. `LEAK_CHECK=ids` asserts zero cut/recording-id overlap with
+  every eval manifest — the phrase-level assertion is v1-only and *false-positives* on GP
+  text, because its "train" reference is the three Kaldi dirs and cannot see recovered
+  sessions or the non-parliament axes.
+- Decode: `zipformer/decode.py --epoch 30 --avg 5 --use-averaged-model 1 --exp-dir
+  zipformer/exp_gp --decoding-method modified_beam_search --beam-size 4 --eval-set {dev,test}`.
+
+---
+
+# v1 (2026-08-03) — the parliament specialist
+
+Retained as the historical record and the baseline GP-v2 is measured against.
+
+**v1 headline: 5.29% WER**, 649 h, parliament + audiobook only.
 
 ## Model & data
 
@@ -107,6 +200,7 @@ streaming (a `--causal 1` variant would be a separate run).
 - **Corpus-size slope, not converged SOTA.** In-domain parliament ASR saturates ≈ 1800 h;
   at 649 h we are on the steep part. The ~257 h recoverable via
   [BG_ASR_V2_PLAN.md](BG_ASR_V2_PLAN.md) workstream A should move this down.
+  *(Settled by GP-v2: 1,744.8 h → 4.12 % test, so the slope was real.)*
 - **Reference-transcript ceiling.** References are stenographic + Kaldi-aligned; some
   residual WER is reference noise, not model error.
 - **Domain matters (measured).** In-domain parliament = 5.29%; out-of-domain read Wikipedia
@@ -123,9 +217,12 @@ streaming (a `--causal 1` variant would be a separate run).
 
 ## Next
 
-- **v2** (primary, product-improving): recover the 110 quarantined sessions (+~257 h, train
-  only), self-clean in-bounds desync with this baseline, retrain, decode the **same** frozen
-  test → v1↔v2 delta. See [BG_ASR_V2_PLAN.md](BG_ASR_V2_PLAN.md).
+- **v2 — DONE (2026-08-08).** Sessions recovered, corpus diversified to 1,744.8 h, retrained,
+  same frozen test decoded once: **5.29 % → 4.12 %**. See the GP-v2 section at the top.
+- Remaining, in order: fresh self-recorded eval set (the only clean generalization measure) ·
+  sherpa-onnx int8 export of GP-v2 · self-training round 2 (GP-v2 as teacher for the
+  weak-labeled BNR/YT axes) · Zipformer-L only if the cheap levers are spent
+  ([BG_ASR_ROADMAP.md](BG_ASR_ROADMAP.md)).
 
 ## Future work / benchmark TODO
 

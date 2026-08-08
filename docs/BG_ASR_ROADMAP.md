@@ -1,8 +1,12 @@
 # BG ASR — roadmap / next actions (sequenced)
 
-**v1 shipped:** 5.29% test WER on the frozen parliament holdout
+**GP-v2 shipped (2026-08-08):** **4.12%** test WER on the frozen parliament holdout, from
+1,744.8 h across eight registers — v1's 5.29% at 649 h is the baseline it replaced
 ([BG_ASR_BENCHMARK.md](BG_ASR_BENCHMARK.md)). This file is the ordered index of what comes
 next; each phase links to its detailed plan.
+
+**Status of the phases below:** 0, 1, 2 and 2b are resolved — see "Where GP-v2 landed" after
+the phase list. Phases 2c onward are still open.
 
 ## Direction — GENERAL-PURPOSE (decided 2026-08-04)
 
@@ -86,6 +90,27 @@ Re-train the Zipformer as a **streaming** (chunk-wise, causal) model for real-ti
 use. Reuses the same fbank + BPE + (v2) corpus; costs ~1–2 % abs WER vs offline but enables
 live captioning and a sherpa-onnx **streaming** export. Do this **after v2** so it trains on
 the larger, cleaner corpus.
+
+## Where GP-v2 landed (2026-08-08) — what's resolved, what's now blocking
+
+- **Phase 2 delivered, and the data bet was right.** 649 h → 1,744.8 h with *nothing else
+  changed* moved the frozen test from 5.29 % to **4.12 %** (−22 % rel), dev 5.29 → 3.94,
+  and dev loss 0.1315 → 0.1180. Substitutions carried the gain (3038 → 2256, −26 %).
+- **Phase 2b: Zipformer-L is NOT triggered.** The stated gate was "train loss floors early
+  while dev still improves". Neither floored — at epoch 30 train was still descending
+  (0.1839 → 0.1827) alongside dev (0.1192 → 0.1180), with Eden's LR already near zero. That
+  is *under-trained relative to the data*, not capacity starvation. Cheaper levers first: a
+  longer schedule (~40 epochs), then mux rebalancing, then L.
+- **The external LM is retired.** It was v1's best system and is now a loss on every set,
+  even rebuilt on the full GP corpus text — the benchmark's LM section has the isolating
+  experiment (OOV halved, WER worse). Ship LM-free `modified_beam_search`; this also
+  simplifies the ONNX/streaming export, which no longer needs a lexicon or graph.
+- **NEW BLOCKER — the generalization claim has no clean measurement.** Folding FLEURS/CV
+  *train* into training (the phase-2 lever) consumed the only OOD sets we had: their test
+  splits are verified leak-free but are now *in-corpus*, and the Whisper comparison no
+  longer holds training exposure constant. The fresh self-recorded set (phase 1's leftover)
+  is therefore promoted from "nice to have" to **the next thing to build** — without it,
+  4.12 % on parliament is the only number GP-v2 can honestly claim.
 
 ## Rationale for this order
 

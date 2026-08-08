@@ -27,9 +27,15 @@ LOCAL="$ICEFALL/egs/librispeech/ASR/local"
 OMNI=$(cd "$(dirname "$0")" && pwd)
 PY=${PY:-$OMNI/venv/bin/python}
 NGRAM=${NGRAM:-3}
-LANG=data/lang_bpe_500
-LM="G_${NGRAM}_gram"
-ARPA="data/lm/bg_word_${NGRAM}gram.arpa"
+# TAG selects the corpus variant built by build_kenlm_bg.sh ("" = v1, "_gp" = GP corpus).
+# Each variant gets its OWN lang dir, so a rebuild never clobbers a working LG: the v1
+# LG.pt in data/lang_bpe_500 stays decodable while data/lang_bpe_500_gp is built beside it.
+TAG=${TAG:-}
+LANG_DIR=${LANG_DIR:-data/lang_bpe_500${TAG}}   # NOT "LANG" — that is the shell locale var
+LM="G_${NGRAM}_gram${TAG}"
+ARPA="data/lm/bg_word_${NGRAM}gram${TAG}.arpa"
+LM_TEXT="data/lm/lm_text${TAG}.txt"
+BPE_SRC=${BPE_SRC:-data/lang_bpe_500/bpe.model}   # same tokenizer as the acoustic model
 
 cd "$REC"
 export PYTHONPATH="$ICEFALL:${PYTHONPATH:-}"
@@ -38,15 +44,17 @@ ln -sfn "$OMNI/data/lm" data/lm              # arpa in, G/LG out (alongside data
 
 # --- prerequisites ---
 [ -f "$ARPA" ] || { echo "ERROR: $ARPA missing — run build_kenlm_bg.sh (NGRAM=$NGRAM) first"; exit 1; }
-[ -f "$LANG/bpe.model" ] || { echo "ERROR: $LANG/bpe.model missing"; exit 1; }
+mkdir -p "$LANG_DIR"
+[ -f "$LANG_DIR/bpe.model" ] || cp "$BPE_SRC" "$LANG_DIR/bpe.model"   # BPE must match the AM's
+[ -f "$LANG_DIR/bpe.model" ] || { echo "ERROR: $LANG_DIR/bpe.model missing"; exit 1; }
 "$PY" -c "import kaldilm" 2>/dev/null || {
   echo "ERROR: kaldilm not installed (needed for ARPA -> G.fst). Run:"
   echo "    $PY -m pip install kaldilm"; exit 1; }
 
 # --- stage 0: words.txt = symbol table over the LM vocabulary (guarantees G coverage) ---
-if [ ! -f "$LANG/words.txt" ]; then
-  echo "=== stage 0: build $LANG/words.txt from the LM vocab ==="
-  "$PY" - "$LANG" data/lm/lm_text.txt "$LANG/transcript_words.txt" <<'PY'
+if [ ! -f "$LANG_DIR/words.txt" ]; then
+  echo "=== stage 0: build $LANG_DIR/words.txt from the LM vocab ==="
+  "$PY" - "$LANG_DIR" "$LM_TEXT" "$LANG_DIR/transcript_words.txt" <<'PY'
 import sys, pathlib
 lang, lm_text, tw = sys.argv[1:4]
 vocab = set()
@@ -72,36 +80,36 @@ with out.open("w", encoding="utf-8") as w:
 print(f"  words.txt: {i} symbols -> {out}")
 PY
 else
-  echo "=== stage 0: $LANG/words.txt exists ($(wc -l <"$LANG/words.txt") symbols) — reuse ==="
+  echo "=== stage 0: $LANG_DIR/words.txt exists ($(wc -l <"$LANG_DIR/words.txt") symbols) — reuse ==="
 fi
 
 # --- stage 1: BPE lexicon -> L_disambig.pt ---
-if [ ! -f "$LANG/L_disambig.pt" ]; then
+if [ ! -f "$LANG_DIR/L_disambig.pt" ]; then
   echo "=== stage 1: prepare_lang_bpe -> L_disambig.pt ==="
-  "$PY" local/prepare_lang_bpe.py --lang-dir "$LANG"
+  "$PY" local/prepare_lang_bpe.py --lang-dir "$LANG_DIR"
 else
-  echo "=== stage 1: $LANG/L_disambig.pt exists — reuse ==="
+  echo "=== stage 1: $LANG_DIR/L_disambig.pt exists — reuse ==="
 fi
 
 # --- stage 2: ARPA -> G.fst.txt (word-level, disambig #0) ---
 if [ ! -f "data/lm/${LM}.fst.txt" ]; then
   echo "=== stage 2: kaldilm -> data/lm/${LM}.fst.txt ==="
-  "$PY" -m kaldilm --read-symbol-table="$LANG/words.txt" \
+  "$PY" -m kaldilm --read-symbol-table="$LANG_DIR/words.txt" \
       --disambig-symbol='#0' --max-order="$NGRAM" "$ARPA" > "data/lm/${LM}.fst.txt"
 else
   echo "=== stage 2: data/lm/${LM}.fst.txt exists — reuse ==="
 fi
 
 # --- stage 3: compose L|>G, determinize -> LG.pt ---
-echo "=== stage 3: compile_lg -> $LANG/LG.pt ==="
-rm -f "$LANG/LG.pt"                              # compile_lg skips if present; force fresh
-"$PY" local/compile_lg.py --lang-dir "$LANG" --lm "$LM"
+echo "=== stage 3: compile_lg -> $LANG_DIR/LG.pt ==="
+rm -f "$LANG_DIR/LG.pt"                              # compile_lg skips if present; force fresh
+"$PY" local/compile_lg.py --lang-dir "$LANG_DIR" --lm "$LM"
 
 echo
-echo "-> $LANG/LG.pt ready.  Tune ngram-lm-scale on DEV:"
+echo "-> $LANG_DIR/LG.pt ready.  Tune ngram-lm-scale on DEV:"
 echo "   for s in 0.01 0.05 0.1 0.2 0.3; do"
 echo "     $PY zipformer/decode.py --epoch 30 --avg 5 --use-averaged-model 1 \\"
 echo "       --eval-set dev --decoding-method fast_beam_search_nbest_LG \\"
 echo "       --ngram-lm-scale \$s --exp-dir zipformer/exp \\"
-echo "       --bpe-model $LANG/bpe.model --max-duration 600 ; done"
+echo "       --bpe-model $LANG_DIR/bpe.model --max-duration 600 ; done"
 echo "   pick the best-WER scale, then run it ONCE on --eval-set test."
